@@ -160,12 +160,14 @@ class App:
     
 
     def mostrar_widgets(self):
+
         uploaded_file = st.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
     
         if uploaded_file is not None:
             self.resultados = ProcesadorDeDatos()
             self.resultados.cargar_archivo(uploaded_file)
         
+<<<<<<< HEAD
             if self.resultados.verificacion_exitosa:
                 #valores = [1, 3, 5, 10]
                 self.intervalos = st.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
@@ -193,6 +195,35 @@ class App:
                 st.error("El archivo cargado no cumple con el formato deseado.")
         else:
             st.warning("Por favor, cargue un archivo para continuar.")
+=======
+        if self.resultados.verificacion_exitosa:
+            valores = [1,3,5,10]
+            self.intervalos = st.selectbox("Seleccione intervalo (knots)", valores)
+        
+            st.write(f"Valor seleccionado: {self.intervalos}")
+
+            self.dir_pista = st.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1)
+            st.write(f"Direccion de pista indicada: {self.dir_pista}")
+
+            self.limites=st.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10)
+            st.write(f"Límite indicado: {self.limites}")
+
+            if st.button("Agrupar"):
+                agrupacion = self.resultados.agrupar(self.intervalos)
+                if agrupacion is not None:
+                    viento_cruzados = self.resultados.df_vientos_cruzado(self.dir_pista)
+                    frecuencias=self.resultados.frec_con_limi(self.limites)
+                    suma_frecuencias = self.resultados.suma_f_ad_perso
+                    final = self.resultados.coheficiente
+
+                    st.write("Resultados de Agrupación:")
+                    st.dataframe(agrupacion)
+                    st.write("Resultados de Vientos Cruzados:")
+                    st.dataframe(viento_cruzados)
+                    st.write("Frecuencias con límites:")
+                    st.dataframe(frecuencias)
+                    st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Total frecuencias:** {suma_frecuencias}")
+>>>>>>> 16fe6a128f30c38a8d325202b5a26dab9c6f7a5d
 
 
 def main():
