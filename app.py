@@ -113,31 +113,32 @@ class ProcesadorDeDatos:
     def df_vientos_cruzado(self,valor):
     
         etiquetas=self.ordenado.columns
-        try:
-            rangos = np.array([list(map(int, col.split('-'))) for col in etiquetas])
-        except ValueError as e:
-            st.error("Error", f"Error al procesar las etiquetas: {e}")
-            return
+        #try:
+            #rangos = np.array([list(map(int, col.split('-'))) for col in etiquetas])
+        #except ValueError as e:
+            #st.error("Error", f"Error al procesar las etiquetas: {e}")
+            #return
         
-        fines = rangos[:, 1]
-        rad = np.pi / 180
-        
+        #fines = rangos[:, 1]
+        #rad = np.pi / 180
+        extremos_derechos = [int(col.split('-')[1]) for col in self.ordenado.columns]
         self.v_c = pd.DataFrame(index=self.ordenado.index, columns=etiquetas)
                 
-        dif_angulos = (self.dir_array[:, None] - valor) * rad
+        for i in self.ordenado.index:
+            for j, col in enumerate(self.ordenado.columns):
+                diferencia = i - valor  # Resta del índice al valor
+                resultado = np.sin(diferencia) * extremos_derechos[j]
+                resultado=np.abs(resultado)
+                resultado=resultado.round(2)# Multiplica por el extremo derecho
+                self.v_c.at[i, col] = resultado
         
-        resultados = np.abs(fines * np.sin(dif_angulos))
-        resultados = np.round(resultados, 2)
-        
-        self.v_c.iloc[:, :] = resultados
-        
-        lista_valores = []
-        for index, row in self.v_c.iterrows():
-            for col in self.v_c.columns:
-                valor = row[col]
+        #lista_valores = []
+        #for index, row in self.v_c.iterrows():
+            #for col in self.v_c.columns:
+                #valor = row[col]
             # Verificar si el valor es mayor a 10
-                if valor > 10:
-                    lista_valores.append((index, col, valor))  
+                #if valor > 10:
+                    #lista_valores.append((index, col, valor))  
         #print(self.v_c)
 
         return self.v_c
@@ -257,7 +258,7 @@ class App:
 
         # Mostrar los valores individuales en cada dirección para los intervalos a partir de 10-20
             for j, valor in enumerate(intensidades):
-                if valor > 0:  # Solo mostrar si el valor es mayor que cero
+                if valor >= 0.1:  # Solo mostrar si el valor es mayor que cero
                     fig.add_trace(go.Scatterpolar(
                         r=[15],  # Usar el radio calculado
                         theta=[direcciones[j]],  # Dirección correspondiente
@@ -267,6 +268,17 @@ class App:
                         textfont=dict(size=12, color='blue'),  # Estilo del texto
                         showlegend=False  # No mostrar en la leyenda
                     ))
+                elif 0<valor<0.1:
+                    fig.add_trace(go.Scatterpolar(
+                        r=[15],  # Usar el radio calculado
+                        theta=[direcciones[j]],  # Dirección correspondiente
+                        mode='text',  # Modo de texto
+                        text=["+"],  # Anotación con el valor individual
+                        textposition='middle center',  # Centrar el texto en la dirección
+                        textfont=dict(size=12, color='red', family='Arial Bold'),  # Estilo del texto
+                        showlegend=False  # No mostrar en la leyenda
+                    ))
+
         
         # Configuración del gráfico polar
         fig.update_layout(
@@ -314,12 +326,13 @@ class App:
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
                 if st.button("Resultado"):
                     agrupacion = self.resultados.agrupar(self.intervalos)
+                    for col in agrupacion.columns:
+                        agrupacion[col] = pd.to_numeric(agrupacion[col], errors='coerce')   
                     if agrupacion is not None:
                         viento_cruzados = self.resultados.df_vientos_cruzado(self.dir_pista)
                         frecuencias = self.resultados.frec_con_limi(self.limites)
                         suma_frecuencias = self.resultados.suma_f_ad_perso
                         final = self.resultados.coheficiente
-                        tipo=self.resultados.tipo
                         tabla_grafico=self.resultados.tabla_grafico()
                         #array=self.resultados.array_tabla_graf
                         #suma_tabla=self.resultados.suma_tabla_graf
@@ -328,16 +341,21 @@ class App:
 
                     # Mostrar los resultados en la interfaz
                         st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Total frecuencias:** {suma_frecuencias}")
-                        st.write("tipo")
-                        st.write(tabla_grafico)                        
-                        #st.write(f"suma:{suma_tabla}")
                         st.write("Resultados de Agrupación:")
-                        st.dataframe(self.resultados.df_final)
                         st.dataframe(agrupacion)
+                        st.write("vientos cruzados:")
+                        st.dataframe(viento_cruzados)
+                        st.write("Frecuencias con límites:")
+                        st.dataframe(frecuencias)
+                        st.write("tabla_grafico")
+                        st.write(tabla_grafico)                        
+                    
                         #st.write("Resultados de Vientos Cruzados:")
                         #st.dataframe(viento_cruzados)
-                        #st.write("Frecuencias con límites:")
-                        #st.dataframe(frecuencias)
+                        
+                        st.write(suma_frecuencias)
+                        st.write(agrupacion.sum().sum())
+                        
                         
             else:
                 st.error("El archivo cargado no cumple con el formato deseado.")
