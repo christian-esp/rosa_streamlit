@@ -23,33 +23,43 @@ class ProcesadorDeDatos:
         self.lista_de_frecuencias = []
         self.max_tablas = []
         self.tipo = None
+        self.agrupar_direc = 10
 
     def cargar_archivo(self, archivo):
-        if archivo is not None:
-            try:
-                if archivo.name.endswith('.xlsx'):
-                    self.df_final = pd.read_excel(archivo)
-                elif archivo.name.endswith('.csv'):
-                    self.df_final = pd.read_csv(archivo, sep=None, engine='python')
+        """Carga un archivo y verifica su validez."""
+        if archivo is None:
+            st.error("No se seleccionó ningún archivo.")
+            return
 
-            # Verificar el archivo
-                self.verificar()  # Llama al método verificar
+        try:
+            self.df_final = self.read_file(archivo)
+            self.verificar()  # Verificar el archivo
             
-                self.df_final.columns = ['Direccion', 'Nudos']
-                self.df_final.iloc[:, 0] = self.df_final.iloc[:, 0].where(self.df_final.iloc[:, 0] != 0, 360)
-                self.verificacion_exitosa = True  # Establece como True solo si pasa la verificación
-                st.success("El archivo se procesó correctamente.")
-            except ArchivoInvalidoError as e:
-                st.error(f"Error en los Datos: {str(e)}")
-                self.verificacion_exitosa = False  # Asegúrate de establecer esto como False en caso de error
-            except Exception as e:
-                st.error(f"No se pudo leer el archivo: {str(e)}")
-                self.verificacion_exitosa = False  # Asegúrate de establecer esto como False en caso de error
-        else:
-            st.error("No se seleccionó ningún archivo")
+            # Si la verificación es exitosa, aplicar modificaciones
+            self.df_final.columns = ['Direccion', 'Nudos']
+            self.df_final['Direccion'] = self.df_final['Direccion'].replace(0, 360)  # Reemplaza 0 por 360
+            self.verificacion_exitosa = True
+            st.success("El archivo se procesó correctamente.")
+        
+        except ArchivoInvalidoError as e:
+            st.error(f"Error en los Datos: {str(e)}")
+        except Exception as e:
+            st.error(f"No se pudo leer el archivo: {str(e)}")
 
+    def read_file(self, archivo):
+        """Lee el archivo y devuelve un DataFrame."""
+        if archivo.name.endswith('.xlsx'):
+            return pd.read_excel(archivo)
+        elif archivo.name.endswith('.csv'):
+            return pd.read_csv(archivo, sep=None, engine='python')
+        else:
+            raise ArchivoInvalidoError("El archivo debe ser un .xlsx o .csv")
 
     def verificar(self):
+        """Verifica que el DataFrame cumpla con los requisitos."""
+        if self.df_final is None or self.df_final.empty:
+            raise ArchivoInvalidoError("El DataFrame está vacío.")
+
         errores = []
         if self.df_final.shape[1] < 2:
             errores.append("El archivo debe tener al menos dos columnas con títulos en la primera fila.")
@@ -66,8 +76,6 @@ class ProcesadorDeDatos:
 
         if errores:
             raise ArchivoInvalidoError("\n".join(errores))
-        
-        return "todo ok"
     
 
     def agrupar(self, intervalo):
@@ -77,23 +85,23 @@ class ProcesadorDeDatos:
         elif not self.verificacion_exitosa:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
-
-        conteo_viento_calma = self.df_final[self.df_final["Nudos"] == 0].shape[0]
-        conteo_total = self.df_final[self.df_final["Nudos"] > 0].shape[0]
+        df_agrupar=self.df_final.copy()
+        conteo_viento_calma = df_agrupar[df_agrupar["Nudos"] == 0].shape[0]
+        conteo_total = df_agrupar[df_agrupar["Nudos"] > 0].shape[0]
 
         self.viento_calma = conteo_viento_calma
         self.suma_total_frec = conteo_total
 
-        intervalos_nudos = np.arange(0, self.df_final['Nudos'].max() + intervalo, intervalo)
+        intervalos_nudos = np.arange(0, df_agrupar['Nudos'].max() + intervalo, intervalo)
         
-        self.df_final['Direccion'] = self.redondear_personalizado(self.df_final['Direccion'])
+        df_agrupar['Direccion'] = self.redondear_personalizado(df_agrupar['Direccion'])
         
-        self.df_final.iloc[:, 0] = self.df_final.iloc[:, 0].where(self.df_final.iloc[:, 0] != 0, 360)
-        self.df_final.sort_values(by='Direccion', inplace=True)
-        self.df_final['Intervalo_Nudos'] = pd.cut(self.df_final['Nudos'], bins=intervalos_nudos, right=False)
+        df_agrupar.iloc[:, 0] = df_agrupar.iloc[:, 0].where(df_agrupar.iloc[:, 0] != 0, 360)
+        df_agrupar.sort_values(by='Direccion', inplace=True)
+        df_agrupar['Intervalo_Nudos'] = pd.cut(df_agrupar['Nudos'], bins=intervalos_nudos, right=False)
 
-        self.df_final['Intervalo_Nudos'] = self.df_final['Intervalo_Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
-        self.ordenado = self.df_final.groupby(['Direccion', 'Intervalo_Nudos'], observed=False).size().unstack(fill_value=0)
+        df_agrupar['Intervalo_Nudos'] = df_agrupar['Intervalo_Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+        self.ordenado = df_agrupar.groupby(['Direccion', 'Intervalo_Nudos'], observed=False).size().unstack(fill_value=0)
         self.ordenado = self.ordenado.map(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
 
         return self.ordenado
@@ -150,46 +158,38 @@ class ProcesadorDeDatos:
         self.f_ad_perso = self.f_ad_perso.map(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
               
         self.coheficiente = round((self.suma_f_ad_perso + self.viento_calma) / (self.suma_total_frec + self.viento_calma) * 100, 2)
-
         
         return self.f_ad_perso
     
     def tabla_grafico(self):
+        df_agrupar1=self.df_final.copy()
 
-        intervalos_10 = np.arange(0, self.df_final['Nudos'].max() + 10, 10)
+        intervalos_nudos = np.arange(0, df_agrupar1['Nudos'].max() + 10,10)
         
-        self.df_final['Direccion'] = self.redondear_personalizado(self.df_final['Direccion'])
+        df_agrupar1['Direccion'] = self.redondear_personalizado(df_agrupar1['Direccion'])
         
-        self.df_final.iloc[:, 0] = self.df_final.iloc[:, 0].where(self.df_final.iloc[:, 0] != 0, 360)
-        self.df_final.sort_values(by='Direccion', inplace=True)
-        self.df_final['Direccion'] = pd.cut(self.df_final['Direccion'], bins=self.dir_graf, right=True, include_lowest=True)
-        self.df_final['Direccion'] = self.df_final['Direccion'].apply(lambda x: x.right)
-        self.df_final['Intervalo_Nudos'] = pd.cut(self.df_final['Nudos'], bins=intervalos_10, right=False)
-        self.df_final['Intervalo_Nudos'] = self.df_final['Intervalo_Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+        df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 360)
+        df_agrupar1.sort_values(by='Direccion', inplace=True)
+        df_agrupar1['Nudos'] = pd.cut(df_agrupar1['Nudos'], bins=intervalos_nudos, right=False)
 
-        self.df_final = self.df_final.groupby(['Direccion', 'Intervalo_Nudos'], observed=False).size().unstack(fill_value=0)
-        self.df_final.index=self.dir_graf
-        self.df_final = self.df_final.map(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
-        self.array_df_final=self.df_final.to_numpy()
-        #porcentaje = (self.array_df_final / self.suma_total_frec) * 100
-        #self.tabla_porcentaje = pd.DataFrame(porcentaje, index=self.ordenado.index, columns=labels_tabla_grafico)
-        #self.tabla_porcentaje=self.tabla_porcentaje.round(2)
+        df_agrupar1['Nudos'] = df_agrupar1['Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+        df_agrupar1['Direccion'] = ((df_agrupar1['Direccion'] - 1) // 10 * 10 + 10).astype(int)
 
-        #self.tabla_graf = self.tabla_graf.apply(pd.to_numeric, errors='coerce')
-        
-        #self.suma_tabla_graf=self.tabla_graf.sum().sum()
-        
-        #self.tabla_graf = self.tabla_graf.map(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
+        df_agrupar1 = df_agrupar1.groupby(['Direccion', 'Nudos']).size().unstack(fill_value=0)
 
-        #self.array_tabla_graf = self.tabla_graf.to_numpy()
-        #self.tipo=type(self.array_tabla_graf)
-        #porcentajes = (array_tabla_graf / self.suma_total_frec) * 100
-    
-        #self.tabla_porc = pd.DataFrame(porcentajes, index=self.ordenado.index, columns=self.tabla_graf.columns)
-        #self.tabla_porc=self.tabla_porc.round(2)
-        
-        return self.df_final
+        for col in df_agrupar1.columns:
+            df_agrupar1[col] = pd.to_numeric(df_agrupar1[col], errors='coerce').fillna(0)
 
+    # Convertir a float para operaciones de porcentaje
+        df_agrupar1 = df_agrupar1.astype(float)
+
+    # Realizar el cálculo de porcentaje
+        df_agrupar1 = (df_agrupar1 / self.suma_total_frec) * 100
+
+    # Redondear a 2 decimales
+        df_agrupar1 = df_agrupar1.round(2)
+
+        return df_agrupar1
 
 class App:
     def __init__(self):
@@ -201,6 +201,7 @@ class App:
 
     def grafico(self):
         fig = go.Figure()
+        df_graf=self.resultados.tabla_grafico()
 
         # Agregar una línea que cruza desde la dirección de la pista hasta la dirección opuesta
         angulo_pista = self.dir_pista  # Dirección ingresada por el usuario
@@ -211,10 +212,62 @@ class App:
             r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
             theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
             mode='lines',
-            line=dict(color="red", width=2),
-            name="Desde Pista a Opuesto"
+            line=dict(color="red", width=2, dash='dash'),
+            name="Dirección Pista"
         ))
+        limite_rango = {
+            (10, 11): 58,
+            (12, 13): 68,
+            (14, 20): 115
+        }
 
+# Iterar sobre los rangos y agregar las líneas
+        for (lower_limit, upper_limit), r in limite_rango.items():
+            if lower_limit <= self.limites <= upper_limit:
+                for offset in [-10, 10]:  # Desplazamientos para las líneas
+                    fig.add_trace(go.Scatterpolar(
+                        r=[r, r],  # Desde el centro hasta el borde
+                        theta=[angulo_pista + offset, angulo_opuesto - offset],  # Ángulos de inicio y fin
+                        mode='lines',
+                        line=dict(color="green", width=2),
+                        showlegend=False
+                        
+                    ))
+
+        suma_0_10 = df_graf.iloc[:,0].sum()
+        if suma_0_10 > 0:  # Solo mostrar la suma si es mayor que cero
+            fig.add_trace(go.Scatterpolar(
+                r=[0],  # Ubicar en el centro
+                theta=[0],  # Posición horizontal para el texto
+                mode='text',  # Modo de texto
+                text=[f"{suma_0_10:.2f}"],  # Anotación con la suma
+                textposition='middle center',  # Centrar el texto en el círculo
+                textfont=dict(size=20, color='green'),  # Estilo del texto
+                showlegend=False  # No mostrar en la leyenda
+            ))
+
+
+        for i in range(1, df_graf.shape[1]):  # Empezar en 1 para ignorar la primera columna (0-10)
+            intervalo_nudos = df_graf.columns[i]  # Nombre de la columna actual
+            intensidades = df_graf.iloc[:, i].values  # Valores radiales (porcentajes)
+            direcciones = df_graf.index  # Índices del DataFrame son las direcciones en grados
+
+        # Calcular el radio correspondiente para el intervalo de nudos
+            radio = (i) * 10  # Cada intervalo de nudos se asocia a un radio específico
+
+        # Mostrar los valores individuales en cada dirección para los intervalos a partir de 10-20
+            for j, valor in enumerate(intensidades):
+                if valor > 0:  # Solo mostrar si el valor es mayor que cero
+                    fig.add_trace(go.Scatterpolar(
+                        r=[15],  # Usar el radio calculado
+                        theta=[direcciones[j]],  # Dirección correspondiente
+                        mode='text',  # Modo de texto
+                        text=[f"{valor:.2f}"],  # Anotación con el valor individual
+                        textposition='middle center',  # Centrar el texto en la dirección
+                        textfont=dict(size=12, color='blue'),  # Estilo del texto
+                        showlegend=False  # No mostrar en la leyenda
+                    ))
+        
         # Configuración del gráfico polar
         fig.update_layout(
             polar=dict(
@@ -227,18 +280,22 @@ class App:
                     ticktext=[f"{i}" if i > 0 else "360" for i in range(0, 360, 10)]
                 ),
                 radialaxis=dict(
-                    title="Intensidad",
+                    title="Nudos",
                     range=[0, 50],  # Ajusta el rango según tus datos
                     tickvals=[10, 20, 30, 40, 50],
                 )
             ),
-            title="Gráfico Polar de Direcciones de Viento",
+            title="Gráfico Rosa de Vientos",
             width=700,
             height=700
         )
-
+        config = {
+            'scrollZoom': False,      # Desactiva el zoom con scroll
+            'displayModeBar': False,  # Oculta la barra de herramientas
+            'staticPlot': True        # Convierte el gráfico en estático
+        }
         # Mostrar el gráfico en Streamlit
-        st.plotly_chart(fig)
+        st.plotly_chart(fig, config=config)
 
 
     def mostrar_widgets(self):
@@ -272,11 +329,11 @@ class App:
                     # Mostrar los resultados en la interfaz
                         st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Total frecuencias:** {suma_frecuencias}")
                         st.write("tipo")
-                        st.write(tabla_grafico)
-                        #st.dataframe(tabla_grafico)
+                        st.write(tabla_grafico)                        
                         #st.write(f"suma:{suma_tabla}")
-                        #st.write("Resultados de Agrupación:")
-                        #st.dataframe(agrupacion)
+                        st.write("Resultados de Agrupación:")
+                        st.dataframe(self.resultados.df_final)
+                        st.dataframe(agrupacion)
                         #st.write("Resultados de Vientos Cruzados:")
                         #st.dataframe(viento_cruzados)
                         #st.write("Frecuencias con límites:")
