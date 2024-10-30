@@ -4,6 +4,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+st.markdown(
+    """
+    <style>
+        .css-18e3th9 {
+            padding-top: 0rem;
+        }
+        .css-1d391kg {
+            padding-top: 0rem; /* Ajusta aquí para que quede pegado a la parte superior */
+        }
+        /* Ajusta el espaciado del título en la barra lateral */
+        .sidebar .css-1d391kg {
+            padding-top: 0rem; /* Cambia este valor para ajustar el espaciado del título */
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 class ArchivoInvalidoError(Exception):
     """Excepción levantada para errores de datos en el archivo."""
     pass
@@ -24,6 +41,7 @@ class ProcesadorDeDatos:
         self.max_tablas = []
         self.tipo = None
         self.agrupar_direc = 10
+        self.totales=None
 
     def cargar_archivo(self, archivo):
         """Carga un archivo y verifica su validez."""
@@ -37,7 +55,7 @@ class ProcesadorDeDatos:
             
             # Si la verificación es exitosa, aplicar modificaciones
             self.df_final.columns = ['Direccion', 'Nudos']
-            self.df_final['Direccion'] = self.df_final['Direccion'].replace(0, 360)  # Reemplaza 0 por 360
+            self.df_final['Direccion'] = self.df_final['Direccion'].replace(0, 360)
             self.verificacion_exitosa = True
             st.success("El archivo se procesó correctamente.")
         
@@ -98,12 +116,16 @@ class ProcesadorDeDatos:
         
         df_agrupar.iloc[:, 0] = df_agrupar.iloc[:, 0].where(df_agrupar.iloc[:, 0] != 0, 360)
         df_agrupar.sort_values(by='Direccion', inplace=True)
-        df_agrupar['Intervalo_Nudos'] = pd.cut(df_agrupar['Nudos'], bins=intervalos_nudos, right=False)
+        df_agrupar['Intervalo_Nudos'] = pd.cut(df_agrupar['Nudos'], bins=intervalos_nudos, right=True)
 
         df_agrupar['Intervalo_Nudos'] = df_agrupar['Intervalo_Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
         self.ordenado = df_agrupar.groupby(['Direccion', 'Intervalo_Nudos'], observed=False).size().unstack(fill_value=0)
-        self.ordenado = self.ordenado.map(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
-
+        self.ordenado = self.ordenado.apply(pd.to_numeric, errors='coerce')
+        self.ordenado = self.ordenado.applymap(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
+        self.viento_calma_fila = pd.DataFrame([[self.viento_calma]], columns=['Viento Calma'])
+        self.viento_calma_fila = self.viento_calma_fila.apply(pd.to_numeric, errors='coerce')
+        self.viento_calma_fila = self.viento_calma_fila.applymap(lambda x: f'{x:.0f}' if isinstance(x, (int, float)) else x)
+        
         return self.ordenado
 
     def redondear_personalizado(self, numeros):
@@ -113,33 +135,18 @@ class ProcesadorDeDatos:
     def df_vientos_cruzado(self,valor):
     
         etiquetas=self.ordenado.columns
-        #try:
-            #rangos = np.array([list(map(int, col.split('-'))) for col in etiquetas])
-        #except ValueError as e:
-            #st.error("Error", f"Error al procesar las etiquetas: {e}")
-            #return
-        
-        #fines = rangos[:, 1]
-        #rad = np.pi / 180
+
         extremos_derechos = [int(col.split('-')[1]) for col in self.ordenado.columns]
         self.v_c = pd.DataFrame(index=self.ordenado.index, columns=etiquetas)
                 
         for i in self.ordenado.index:
             for j, col in enumerate(self.ordenado.columns):
-                diferencia = i - valor  # Resta del índice al valor
-                resultado = np.sin(diferencia) * extremos_derechos[j]
+                diferencia = i - valor
+                diferencia_rad = np.radians(diferencia)  # Resta del índice al valor
+                resultado = np.sin(diferencia_rad) * extremos_derechos[j]
                 resultado=np.abs(resultado)
                 resultado=resultado.round(2)# Multiplica por el extremo derecho
                 self.v_c.at[i, col] = resultado
-        
-        #lista_valores = []
-        #for index, row in self.v_c.iterrows():
-            #for col in self.v_c.columns:
-                #valor = row[col]
-            # Verificar si el valor es mayor a 10
-                #if valor > 10:
-                    #lista_valores.append((index, col, valor))  
-        #print(self.v_c)
 
         return self.v_c
     
@@ -171,7 +178,7 @@ class ProcesadorDeDatos:
         
         df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 360)
         df_agrupar1.sort_values(by='Direccion', inplace=True)
-        df_agrupar1['Nudos'] = pd.cut(df_agrupar1['Nudos'], bins=intervalos_nudos, right=False)
+        df_agrupar1['Nudos'] = pd.cut(df_agrupar1['Nudos'], bins=intervalos_nudos, right=True)
 
         df_agrupar1['Nudos'] = df_agrupar1['Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
         df_agrupar1['Direccion'] = ((df_agrupar1['Direccion'] - 1) // 10 * 10 + 10).astype(int)
@@ -217,14 +224,15 @@ class App:
             name="Dirección Pista"
         ))
         limite_rango = {
-            (10, 11): 58,
-            (12, 13): 68,
-            (14, 20): 115
+            (10, 11): 59,
+            (12, 13): 69,
+            (14, 20): 116
         }
 
 # Iterar sobre los rangos y agregar las líneas
         for (lower_limit, upper_limit), r in limite_rango.items():
             if lower_limit <= self.limites <= upper_limit:
+   
                 for offset in [-10, 10]:  # Desplazamientos para las líneas
                     fig.add_trace(go.Scatterpolar(
                         r=[r, r],  # Desde el centro hasta el borde
@@ -234,6 +242,7 @@ class App:
                         showlegend=False
                         
                     ))
+                    
 
         suma_0_10 = df_graf.iloc[:,0].sum()
         if suma_0_10 > 0:  # Solo mostrar la suma si es mayor que cero
@@ -260,7 +269,7 @@ class App:
             for j, valor in enumerate(intensidades):
                 if valor >= 0.1:  # Solo mostrar si el valor es mayor que cero
                     fig.add_trace(go.Scatterpolar(
-                        r=[15],  # Usar el radio calculado
+                        r=[radio+5],  # Usar el radio calculado
                         theta=[direcciones[j]],  # Dirección correspondiente
                         mode='text',  # Modo de texto
                         text=[f"{valor:.2f}"],  # Anotación con el valor individual
@@ -270,7 +279,7 @@ class App:
                     ))
                 elif 0<valor<0.1:
                     fig.add_trace(go.Scatterpolar(
-                        r=[15],  # Usar el radio calculado
+                        r=[radio+5],  # Usar el radio calculado
                         theta=[direcciones[j]],  # Dirección correspondiente
                         mode='text',  # Modo de texto
                         text=["+"],  # Anotación con el valor individual
@@ -311,6 +320,7 @@ class App:
 
 
     def mostrar_widgets(self):
+        st.sidebar.title("Parámetros de configuración")
 
         uploaded_file = st.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
     
@@ -319,44 +329,42 @@ class App:
             self.resultados.cargar_archivo(uploaded_file)
 
             if self.resultados.verificacion_exitosa:
-                self.intervalos = st.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
-                self.dir_pista = st.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
-                self.limites = st.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
+                self.intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
+                self.dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
+                self.limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
 
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
                 if st.button("Resultado"):
                     agrupacion = self.resultados.agrupar(self.intervalos)
-                    for col in agrupacion.columns:
-                        agrupacion[col] = pd.to_numeric(agrupacion[col], errors='coerce')   
+                
                     if agrupacion is not None:
                         viento_cruzados = self.resultados.df_vientos_cruzado(self.dir_pista)
                         frecuencias = self.resultados.frec_con_limi(self.limites)
                         suma_frecuencias = self.resultados.suma_f_ad_perso
-                        final = self.resultados.coheficiente
+                        viento_calma = self.resultados.viento_calma
+                        conteo_total=self.resultados.suma_total_frec 
+                        final = self.resultados.coheficiente         
                         tabla_grafico=self.resultados.tabla_grafico()
-                        #array=self.resultados.array_tabla_graf
-                        #suma_tabla=self.resultados.suma_tabla_graf
-                        #tabla_porcentaje=self.resultados.tabla_porc
-                        self.grafico()
-
                     # Mostrar los resultados en la interfaz
-                        st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Total frecuencias:** {suma_frecuencias}")
+                        st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Frecuencias:** {suma_frecuencias}")
+                        self.grafico()                       
                         st.write("Resultados de Agrupación:")
+                        st.dataframe(self.resultados.viento_calma_fila)
                         st.dataframe(agrupacion)
                         st.write("vientos cruzados:")
                         st.dataframe(viento_cruzados)
                         st.write("Frecuencias con límites:")
                         st.dataframe(frecuencias)
-                        st.write("tabla_grafico")
-                        st.write(tabla_grafico)                        
-                    
-                        #st.write("Resultados de Vientos Cruzados:")
-                        #st.dataframe(viento_cruzados)
-                        
+                        #st.write("tabla_grafico")
+                        #st.write(tabla_grafico)   
+                        st.write("FRECUENCIAS: ")
+                        st.write("Frecuencias Totales: ")
+                        st.write(conteo_total)
+                        st.write(f"Frecuencias con limite: {self.limites} knots: ")
                         st.write(suma_frecuencias)
-                        st.write(agrupacion.sum().sum())
-                        
-                        
+                        st.write("Viento Calma: ")
+                        st.write(viento_calma)
+                                            
             else:
                 st.error("El archivo cargado no cumple con el formato deseado.")
         else:
