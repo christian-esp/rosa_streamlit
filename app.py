@@ -172,7 +172,8 @@ class ProcesadorDeDatos:
     def tabla_grafico(self):
         df_agrupar1=self.df_final.copy()
 
-        intervalos_nudos = np.arange(0, df_agrupar1['Nudos'].max() + 10,10)
+        intervalos_nudos = [-0.1, 10] + list(np.arange(20, df_agrupar1['Nudos'].max() + 10, 10))
+
         
         df_agrupar1['Direccion'] = self.redondear_personalizado(df_agrupar1['Direccion'])
         
@@ -190,9 +191,10 @@ class ProcesadorDeDatos:
 
     # Convertir a float para operaciones de porcentaje
         df_agrupar1 = df_agrupar1.astype(float)
+        suma_con_ceros=len(self.df_final)
 
     # Realizar el cálculo de porcentaje
-        df_agrupar1 = (df_agrupar1 / self.suma_total_frec) * 100
+        df_agrupar1 = (df_agrupar1 / suma_con_ceros) * 100
 
     # Redondear a 2 decimales
         df_agrupar1 = df_agrupar1.round(2)
@@ -345,6 +347,7 @@ class App:
                         conteo_total=self.resultados.suma_total_frec 
                         final = self.resultados.coheficiente         
                         tabla_grafico=self.resultados.tabla_grafico()
+                        
                     # Mostrar los resultados en la interfaz
                         st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Frecuencias:** {suma_frecuencias}")
                         self.grafico()                       
@@ -364,6 +367,9 @@ class App:
                         st.write(suma_frecuencias)
                         st.write("Viento Calma: ")
                         st.write(viento_calma)
+                        st.dataframe(tabla_grafico)
+                        #st.write(tabla_grafico.sum().sum())
+                    
                                             
             else:
                 st.error("El archivo cargado no cumple con el formato deseado.")
