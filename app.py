@@ -42,6 +42,7 @@ class ProcesadorDeDatos:
         self.tipo = None
         self.agrupar_direc = 10
         self.totales=None
+        self.coheficiente=None
 
     def cargar_archivo(self, archivo):
         """Carga un archivo y verifica su validez."""
@@ -95,6 +96,31 @@ class ProcesadorDeDatos:
         if errores:
             raise ArchivoInvalidoError("\n".join(errores))
     
+    def nu_tabla(self, limite, pista):
+        if self.df_final is None:
+            st.error("Debe cargar un archivo primero.")
+            return
+        elif not self.verificacion_exitosa:
+            st.error("El archivo cargado no cumple con el formato deseado.")
+            return
+        
+        df_nu_tabla=self.df_final.copy()
+        total_datos=len(df_nu_tabla)
+        df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 360)
+        df_nu_tabla.columns = ['Direccion', 'Nudos']
+
+        diferencia=df_nu_tabla["Direccion"] - pista
+        dif_rad= np.radians(diferencia)  # Resta del índice al valor
+        seno = np.sin(dif_rad) 
+        seno=np.abs(seno) 
+        y=seno*df_nu_tabla["Nudos"]
+        comp_transv=pd.DataFrame(y,columns=["Componente_transv"])
+        la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
+
+        self.frec_con_limit=len(la_tabla[la_tabla["Componente_transv"]<=limite])
+        self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
+
+        return la_tabla
 
     def agrupar(self, intervalo):
         if self.df_final is None:
@@ -338,6 +364,7 @@ class App:
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
                 if st.button("Resultado"):
                     agrupacion = self.resultados.agrupar(self.intervalos)
+                    nueva_tabla= self.resultados.nu_tabla(self.limites,self.dir_pista)
                 
                     if agrupacion is not None:
                         viento_cruzados = self.resultados.df_vientos_cruzado(self.dir_pista)
@@ -347,6 +374,10 @@ class App:
                         conteo_total=self.resultados.suma_total_frec 
                         final = self.resultados.coheficiente         
                         tabla_grafico=self.resultados.tabla_grafico()
+                        #viento_calma_nu=len(nueva_tabla[nueva_tabla["Nudos"]==0])
+                        coheficiente=self.resultados.coheficiente_nu
+                        frec_con_limit=self.resultados.frec_con_limit
+                        #la_tabla=self.resultados.la_tabla
                         
                     # Mostrar los resultados en la interfaz
                         st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Frecuencias:** {suma_frecuencias}")
@@ -357,9 +388,7 @@ class App:
                         st.write("vientos cruzados:")
                         st.dataframe(viento_cruzados)
                         st.write("Frecuencias con límites:")
-                        st.dataframe(frecuencias)
-                        #st.write("tabla_grafico")
-                        #st.write(tabla_grafico)   
+                        st.dataframe(frecuencias)  
                         st.write("FRECUENCIAS: ")
                         st.write("Frecuencias Totales: ")
                         st.write(conteo_total)
@@ -368,8 +397,11 @@ class App:
                         st.write("Viento Calma: ")
                         st.write(viento_calma)
                         st.dataframe(tabla_grafico)
-                        #st.write(tabla_grafico.sum().sum())
-                    
+                        st.write("Sector_NU: ")
+                        
+                        st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {coheficiente}%\n\n**Frecuencias:** {frec_con_limit}")
+                        st.dataframe(nueva_tabla)
+                        
                                             
             else:
                 st.error("El archivo cargado no cumple con el formato deseado.")
@@ -377,7 +409,7 @@ class App:
             st.warning("Por favor, cargue un archivo para continuar.")
 
 def main():
-    st.title("ROSA DE LOS VIENTOS")
+    st.title("ANALISIS DE VIENTOS")
 
     # Crear una instancia de la clase InterfazStreamlit
     interfaz = App()
