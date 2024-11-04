@@ -4,23 +4,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 
+st.set_page_config(layout="wide")
+
 st.markdown(
     """
     <style>
-        .css-18e3th9 {
-            padding-top: 0rem;
-        }
-        .css-1d391kg {
-            padding-top: 0rem; /* Ajusta aquí para que quede pegado a la parte superior */
-        }
-        /* Ajusta el espaciado del título en la barra lateral */
-        .sidebar .css-1d391kg {
-            padding-top: 0rem; /* Cambia este valor para ajustar el espaciado del título */
-        }
+    h1 {
+        margin-top: -70px;  /* Ajusta este valor */
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
+
 class ArchivoInvalidoError(Exception):
     """Excepción levantada para errores de datos en el archivo."""
     pass
@@ -199,8 +195,6 @@ class ProcesadorDeDatos:
         df_agrupar1=self.df_final.copy()
 
         intervalos_nudos = [-0.1, 10] + list(np.arange(20, df_agrupar1['Nudos'].max() + 10, 10))
-
-        
         df_agrupar1['Direccion'] = self.redondear_personalizado(df_agrupar1['Direccion'])
         
         df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 360)
@@ -334,7 +328,7 @@ class App:
                     tickvals=[10, 20, 30, 40, 50],
                 )
             ),
-            title="Gráfico Rosa de Vientos",
+            title="GRAFICO",
             width=700,
             height=700
         )
@@ -345,21 +339,20 @@ class App:
         }
         # Mostrar el gráfico en Streamlit
         st.plotly_chart(fig, config=config)
-
-
-    def mostrar_widgets(self):
-        st.sidebar.title("Parámetros de configuración")
-
-        uploaded_file = st.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
     
+    def mostrar_widgets1(self):
+        with st.container():
+            uploaded_file = st.sidebar.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
+
         if uploaded_file is not None:
             self.resultados = ProcesadorDeDatos()
             self.resultados.cargar_archivo(uploaded_file)
 
             if self.resultados.verificacion_exitosa:
-                self.intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
-                self.dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
-                self.limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
+                with st.container():
+                    self.intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
+                    self.dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
+                    self.limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
 
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
                 if st.button("Resultado"):
@@ -378,30 +371,31 @@ class App:
                         coheficiente=self.resultados.coheficiente_nu
                         frec_con_limit=self.resultados.frec_con_limit
                         #la_tabla=self.resultados.la_tabla
-                        
                     # Mostrar los resultados en la interfaz
-                        st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {final}%\n\n**Frecuencias:** {suma_frecuencias}")
-                        self.grafico()                       
-                        st.write("Resultados de Agrupación:")
-                        st.dataframe(self.resultados.viento_calma_fila)
-                        st.dataframe(agrupacion)
-                        st.write("vientos cruzados:")
-                        st.dataframe(viento_cruzados)
-                        st.write("Frecuencias con límites:")
-                        st.dataframe(frecuencias)  
-                        st.write("FRECUENCIAS: ")
-                        st.write("Frecuencias Totales: ")
-                        st.write(conteo_total)
-                        st.write(f"Frecuencias con limite: {self.limites} knots: ")
-                        st.write(suma_frecuencias)
-                        st.write("Viento Calma: ")
-                        st.write(viento_calma)
-                        st.dataframe(tabla_grafico)
-                        st.write("Sector_NU: ")
-                        
-                        st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {coheficiente}%\n\n**Frecuencias:** {frec_con_limit}")
-                        st.dataframe(nueva_tabla)
-                        
+                        with st.container():
+                            st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {coheficiente}")
+                        with st.container():
+                            self.grafico() 
+
+                        with st.expander("Mostrar Tablas"):
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                g=len(nueva_tabla)
+                                st.write("Componente Transversal")
+                                st.dataframe(nueva_tabla)
+                                st.write(g)
+                            with col2:
+                                st.write(f"viento calma: {viento_calma}")
+                              
+                                agrupacion = agrupacion.apply(pd.to_numeric, errors='coerce')
+                                a= agrupacion.sum().sum()
+                                st.write("Frecuencias")
+                                st.dataframe(agrupacion)
+                                st.write(a)
+                        #st.dataframe(tabla_grafico)
+                        #j=tabla_grafico.iloc[:,0].sum()
+                        #st.write(j)
+
                                             
             else:
                 st.error("El archivo cargado no cumple con el formato deseado.")
@@ -415,7 +409,7 @@ def main():
     interfaz = App()
 
     # Llamar al método que muestra los widgets de la interfaz
-    interfaz.mostrar_widgets()
+    interfaz.mostrar_widgets1()
 
 if __name__ == "__main__":
     main()
