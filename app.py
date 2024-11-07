@@ -237,14 +237,24 @@ class App:
         angulo_pista = self.dir_pista  # Dirección ingresada por el usuario
         angulo_opuesto = (angulo_pista + 180) % 360  # Dirección opuesta
 
+        limite_knots = {
+            (10, 11): 107,
+            (12, 13): 125,
+            (14, 20): 210
+        }
+
         # Línea que va de la dirección de la pista a su dirección opuesta
-        fig.add_trace(go.Scatterpolar(
-            r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
-            theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
-            mode='lines',
-            line=dict(color="red", width=2, dash='dash'),
-            name="Dirección Pista"
-        ))
+        for (lower_limit, upper_limit), dist in limite_knots.items():
+            if lower_limit <= self.limites <= upper_limit:
+                fig.add_trace(go.Scatterpolar(
+                    r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
+                    theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
+                    mode='lines',
+                    line=dict(color="red", width=dist),
+                    opacity=0.4,
+                    name="Pista"
+                ))
+
         limite_rango = {
             (10, 11): 59,
             (12, 13): 69,
@@ -274,7 +284,7 @@ class App:
                 mode='text',  # Modo de texto
                 text=[f"{suma_0_10:.2f}"],  # Anotación con la suma
                 textposition='middle center',  # Centrar el texto en el círculo
-                textfont=dict(size=20, color='green'),  # Estilo del texto
+                textfont=dict(size=20, color='black', family="Arial Black"),  # Estilo del texto
                 showlegend=False  # No mostrar en la leyenda
             ))
 
@@ -296,7 +306,7 @@ class App:
                         mode='text',  # Modo de texto
                         text=[f"{valor:.2f}"],  # Anotación con el valor individual
                         textposition='middle center',  # Centrar el texto en la dirección
-                        textfont=dict(size=12, color='blue'),  # Estilo del texto
+                        textfont=dict(size=12, color='blue',family="Arial Black"),  # Estilo del texto
                         showlegend=False  # No mostrar en la leyenda
                     ))
                 elif 0<valor<0.1:
@@ -306,7 +316,7 @@ class App:
                         mode='text',  # Modo de texto
                         text=["+"],  # Anotación con el valor individual
                         textposition='middle center',  # Centrar el texto en la dirección
-                        textfont=dict(size=12, color='red', family='Arial Bold'),  # Estilo del texto
+                        textfont=dict(size=13, color='black', family='Arial Black'),  # Estilo del texto
                         showlegend=False  # No mostrar en la leyenda
                     ))
 
