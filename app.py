@@ -103,18 +103,52 @@ class ProcesadorDeDatos:
         df_nu_tabla=self.df_final.copy()
         total_datos=len(df_nu_tabla)
         df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 360)
-        df_nu_tabla.columns = ['Direccion', 'Nudos']
+        df_nu_tabla.columns = ['Direccion', 'Intensidad (kt)']
 
         diferencia=df_nu_tabla["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
         seno=np.abs(seno) 
-        y=seno*df_nu_tabla["Nudos"]
-        comp_transv=pd.DataFrame(y,columns=["Componente_transv"])
+        y=seno*df_nu_tabla["Intensidad (kt)"]
+        comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
         la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
 
-        self.frec_con_limit=len(la_tabla[la_tabla["Componente_transv"]<=limite])
+        self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
         self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
+
+        conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
+        
+        la_tabla["intensidad Componente Transversal (km/h)"] = conversion
+
+        return la_tabla
+    
+    def nu_tabla_deca(self, limite, pista):
+        if self.df_final is None:
+            st.error("Debe cargar un archivo primero.")
+            return
+        elif not self.verificacion_exitosa:
+            st.error("El archivo cargado no cumple con el formato deseado.")
+            return
+        
+        df_nu_tabla=self.df_final.copy()
+        total_datos=len(df_nu_tabla)
+        df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 36)
+        df_nu_tabla.columns = ['Direccion', 'Intensidad (kt)']
+        df_nu_tabla["Direccion"] =  df_nu_tabla["Direccion"] *10
+        diferencia=df_nu_tabla["Direccion"] - pista
+        dif_rad= np.radians(diferencia)  # Resta del índice al valor
+        seno = np.sin(dif_rad) 
+        seno=np.abs(seno) 
+        y=seno*df_nu_tabla["Intensidad (kt)"]
+        comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
+        la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
+
+        self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
+        self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
+
+        conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
+        
+        la_tabla["intensidad Componente Transversal (km/h)"] = conversion
 
         return la_tabla
 
@@ -363,11 +397,13 @@ class App:
                     self.intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
                     self.dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
                     self.limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
+                    
 
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
                 if st.button("Resultado"):
                     agrupacion = self.resultados.agrupar(self.intervalos)
                     nueva_tabla= self.resultados.nu_tabla(self.limites,self.dir_pista)
+                    nueva_tabla_1=self.resultados.nu_tabla_deca(self.limites,self.dir_pista)
                 
                     if agrupacion is not None:
                         viento_cruzados = self.resultados.df_vientos_cruzado(self.dir_pista)
@@ -383,7 +419,7 @@ class App:
                         #la_tabla=self.resultados.la_tabla
                     # Mostrar los resultados en la interfaz
                         with st.container():
-                            st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} knots\n\n**Coeficiente:** {coheficiente}")
+                            st.markdown(f"**Con una dirección de pista de** {self.dir_pista}° **y un limite de** {self.limites} (kt) \n\n**Coeficiente:** {coheficiente}%")
                         with st.container():
                             self.grafico() 
 
@@ -392,7 +428,7 @@ class App:
                             with col1:
                                 g=len(nueva_tabla)
                                 st.write("Componente Transversal")
-                                st.dataframe(nueva_tabla)
+                                st.write(nueva_tabla)
                                 st.write(g)
                             with col2:
                                 st.write(f"viento calma: {viento_calma}")
