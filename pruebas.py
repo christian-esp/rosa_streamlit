@@ -36,9 +36,19 @@ class ProcesadorDeDatos:
             self.verificar()  # Verificar el archivo
             
             # Si la verificación es exitosa, aplicar modificaciones
-            self.df_final.columns = ['Direccion', 'Nudos']
+            self.df_final.columns = ['Direccion', 'Intensidad (kt)']
             self.verificacion_exitosa = True
             st.success("El archivo se procesó correctamente.")
+            if (self.df_final['Direccion'].abs() >= 100).any():
+                return self.df_final
+            else:
+                
+                self.df_final["Direccion"]= self.df_final["Direccion"].replace(0, 36)
+                self.df_final["Direccion"]=self.df_final["Direccion"]*10
+                direc_deca_completas = pd.DataFrame({'Direccion': list(range(10, 361, 10))})
+                self.df_final= pd.merge(direc_deca_completas,self.df_final,on="Direccion",how="left")
+                self.df_final["Intensidad (kt)"]=self.df_final["Intensidad (kt)"].fillna(0)
+                return self.df_final
         
         except ArchivoInvalidoError as e:
             st.error(f"Error en los Datos: {str(e)}")
@@ -76,35 +86,6 @@ class ProcesadorDeDatos:
         if errores:
             raise ArchivoInvalidoError("\n".join(errores))
         
-    def nu_tabla(self, limite, pista):
-        if self.df_final is None:
-            st.error("Debe cargar un archivo primero.")
-            return
-        elif not self.verificacion_exitosa:
-            st.error("El archivo cargado no cumple con el formato deseado.")
-            return
-        
-        df_nu_tabla=self.df_final.copy()
-        total_datos=len(df_nu_tabla)
-        df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 360)
-        df_nu_tabla.columns = ['Direccion', 'Intensidad (kt)']
-
-        diferencia=df_nu_tabla["Direccion"] - pista
-        dif_rad= np.radians(diferencia)  # Resta del índice al valor
-        seno = np.sin(dif_rad) 
-        seno=np.abs(seno) 
-        y=seno*df_nu_tabla["Intensidad (kt)"]
-        comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
-        la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
-
-        self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
-        self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
-
-        conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
-        
-        la_tabla["intensidad Componente Transversal (km/h)"] = conversion
-
-        return la_tabla
     
     def nu_tabla_deca(self, limite, pista):
         if self.df_final is None:
@@ -115,10 +96,6 @@ class ProcesadorDeDatos:
             return
         
         df_nu_tabla=self.df_final.copy()
-        total_datos=len(df_nu_tabla)
-        df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 36)
-        df_nu_tabla.columns = ['Direccion', 'Intensidad (kt)']
-        df_nu_tabla["Direccion"] =  df_nu_tabla["Direccion"] *10
         diferencia=df_nu_tabla["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
@@ -128,7 +105,7 @@ class ProcesadorDeDatos:
         la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
 
         self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
-        self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
+        #self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
 
         conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
         
@@ -139,6 +116,13 @@ class ProcesadorDeDatos:
 class App:
     def __init__(self):
         self.resultados=ProcesadorDeDatos()
+    
+    def actualizar_tabla(self, limite, pista):
+        """Actualiza la tabla calculada en función de los nuevos parámetros."""
+        nueva_tabla = self.resultados.nu_tabla_deca(limite, pista)
+        if nueva_tabla is not None:
+            st.session_state['tabla_mostrar'] = nueva_tabla
+            st.dataframe(nueva_tabla)
 
     def grafico(self,tablita,pista,limite):
         fig = go.Figure()
@@ -253,6 +237,10 @@ if 'tabla_original' not in st.session_state:
     st.session_state['tabla_original'] = None
 if 'fila_seleccionada' not in st.session_state:
     st.session_state['fila_seleccionada'] = None
+if "filas" not in st.session_state:  
+    st.session_state["filas"] =[]
+if 'tabla_mostrar' not in st.session_state:
+    st.session_state['tabla_mostrar'] = None
 
 with st.container():
     uploaded_file = st.sidebar.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
@@ -267,11 +255,8 @@ if uploaded_file is not None:
     if resultados.verificacion_exitosa:
         st.session_state['resultados'] = resultados 
         st.write("DATOS ORIGINALES")
-        if (resultados.df_final['Direccion'].abs() >= 100).any():
-            st.dataframe(resultados.df_final)
-        else:
-            resultados.df_final['Direccion']=resultados.df_final['Direccion']*10
-            st.dataframe(resultados.df_final)
+        st.dataframe(resultados.df_final)
+        
         
         intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
         dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
@@ -286,49 +271,46 @@ if uploaded_file is not None:
 
         if st.button("Resultado"):
             nueva_tabla_1 = resultados.nu_tabla_deca(limites, dir_pista)
-            st.session_state['nueva_tabla_1'] = nueva_tabla_1
-            filas = [f"Fila {i}" for i in nueva_tabla_1.index]  # Guardar las filas en el estado
-            st.session_state["fila_seleccionada"]= st.selectbox(
-                    "Seleccione una fila para mostrar sus valores:",
-                    st.session_state['filas'],
-                    key="fila_seleccionada"
-                )
+            st.session_state['nueva_tabla_1'] = nueva_tabla_1.copy()
+            #nueva_tabla_1["Direccion"] = nueva_tabla_1["Direccion"] 
+
+    # Generar lista de filas para el selectbox
+            st.session_state['filas'] = [f"Fila {i}" for i in nueva_tabla_1.index]
 # Mostrar la tabla si ya está calculada
-        if 'nueva_tabla_1' in st.session_state and st.session_state['nueva_tabla_1'] is not None:
-            nueva_tabla_1 = st.session_state['nueva_tabla_1']
-            st.write(f"COMPONENTES TRANSVERSALES CON PISTA {dir_pista} Y LIMITE (kt) {limites}")
-            nueva_tabla_1["Direccion"]=nueva_tabla_1["Direccion"]/10
-            st.dataframe(nueva_tabla_1)
+
+        if st.session_state['nueva_tabla_1'] is not None:
+            #nueva_tabla_1 = st.session_state['nueva_tabla_1']
+            st.write(f"COMPONENTES TRANSVERSALES CON PISTA: {dir_pista} Y LIMITE (kt): {limites}")
+            tabla_mostrar = st.session_state['nueva_tabla_1'].copy()
+            #abla_mostrar["Direccion"] = tabla_mostrar["Direccion"] 
+            st.dataframe(tabla_mostrar)
            
 
-    # Mostrar el selectbox
-            if 'filas' in st.session_state:
+            if st.session_state['filas']:
                 fila_seleccionada = st.selectbox(
-                    "Seleccione una fila para mostrar sus valores:",
-                    st.session_state['filas'],
-                    key="fila_seleccionada"
+                        "Seleccione una fila para mostrar sus valores:",
+                        st.session_state['filas'],  # Opciones basadas en las filas generadas
+                        key="fila_seleccionada"
                 )
 
                 if fila_seleccionada:
-            # Calcular resultados basados en la fila seleccionada
+            # Procesar fila seleccionada
                     indice_seleccionado = int(fila_seleccionada.split()[-1])
-                    fila_df = nueva_tabla_1.loc[[indice_seleccionado]]
-
-            # Mostrar la fila seleccionada
-                    st.write("DataFrame con solo Dirección y Nudos de la fila seleccionada:")
+                    fila_df = st.session_state['nueva_tabla_1'].copy().loc[[indice_seleccionado]]
+                    #fila_df_mostrar = fila_df.copy()
+                    
+            # Mostrar datos de la fila seleccionada
+                    st.write("Datos de la fila seleccionada:")
                     st.dataframe(fila_df)
-                    with st.expander("grafico"):
-                        #tablin=fila_df.iloc[:, 0:2]
-                        api.grafico(fila_df,dir_pista, limites)
-
-            # Calcular el resultado
-                    dif = fila_df.iloc[0, 0] - dir_pista
-                    diferencia_rad = np.radians(dif)
-                    resultado = np.sin(diferencia_rad) * fila_df.iloc[0, 1]
-                    resultado = np.abs(resultado).round(2)
+                    comp_transv = fila_df.iloc[0, 2] 
+                    
 
             # Mostrar resultado
-                    if resultado <= limites:
-                        st.write(f"Resultado: {resultado}")
+                    if comp_transv <= limites:
+                        st.write(f"Resultado: 100")
                     else:
                         st.write("Resultado: 0")
+                    
+                    with st.expander("grafico"):
+                        tablin=fila_df.iloc[0, 0:2]
+                        api.grafico(fila_df,dir_pista, limites)
