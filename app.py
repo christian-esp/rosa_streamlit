@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+from st_aggrid import AgGrid, GridOptionsBuilder
+from st_aggrid.shared import GridUpdateMode
 
 st.set_page_config(layout="wide")
 
@@ -39,6 +41,7 @@ class ProcesadorDeDatos:
         self.agrupar_direc = 10
         self.totales=None
         self.coheficiente=None
+        self.la_tabla=None
 
     def cargar_archivo(self, archivo):
         """Carga un archivo y verifica su validez."""
@@ -51,8 +54,8 @@ class ProcesadorDeDatos:
             self.verificar()  # Verificar el archivo
             
             # Si la verificación es exitosa, aplicar modificaciones
-            self.df_final.columns = ['Direccion', 'Nudos']
-            self.df_final['Direccion'] = self.df_final['Direccion'].replace(0, 360)
+            self.df_final.columns = ['Direccion', 'Intensidad (kt)']
+            #self.df_final['Direccion'] = self.df_final['Direccion'].replace(0, 360)
             self.verificacion_exitosa = True
             st.success("El archivo se procesó correctamente.")
         
@@ -100,27 +103,27 @@ class ProcesadorDeDatos:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
         
-        df_nu_tabla=self.df_final.copy()
-        total_datos=len(df_nu_tabla)
-        df_nu_tabla.iloc[:, 0] = df_nu_tabla.iloc[:, 0].where(df_nu_tabla.iloc[:, 0] != 0, 360)
-        df_nu_tabla.columns = ['Direccion', 'Intensidad (kt)']
+        df_nu_tabla1=self.df_final.copy()
+        total_datos=len(df_nu_tabla1)
+        df_nu_tabla1.iloc[:, 0] = df_nu_tabla1.iloc[:, 0].where(df_nu_tabla1.iloc[:, 0] != 0, 360)
+        df_nu_tabla1.columns = ['Direccion', 'Intensidad (kt)']
 
-        diferencia=df_nu_tabla["Direccion"] - pista
+        diferencia=df_nu_tabla1["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
         seno=np.abs(seno) 
-        y=seno*df_nu_tabla["Intensidad (kt)"]
+        y=seno*df_nu_tabla1["Intensidad (kt)"]
         comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
-        la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
+        self.la_tabla = pd.concat([df_nu_tabla1, comp_transv], axis=1)
 
-        self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
+        self.frec_con_limit=len(self.la_tabla[self.la_tabla["Intensidad\nComponente transversal"]<=limite])
         self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
 
-        conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
+        conversion=self.la_tabla["Intensidad\nComponente transversal"]*1.852
         
-        la_tabla["intensidad Componente Transversal (km/h)"] = conversion
+        self.la_tabla["intensidad Componente Transversal (km/h)"] = conversion
 
-        return la_tabla
+        return self.la_tabla
     
     def nu_tabla_deca(self, limite, pista):
         if self.df_final is None:
@@ -141,16 +144,16 @@ class ProcesadorDeDatos:
         seno=np.abs(seno) 
         y=seno*df_nu_tabla["Intensidad (kt)"]
         comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
-        la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
+        self.la_tabla_deca = pd.concat([df_nu_tabla, comp_transv], axis=1)
 
-        self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
+        self.frec_con_limit=len(self.la_tabla_deca[self.la_tabla_deca["Intensidad\nComponente transversal"]<=limite])
         self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
 
-        conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
+        conversion=self.la_tabla_deca["Intensidad\nComponente transversal"]*1.852
         
-        la_tabla["intensidad Componente Transversal (km/h)"] = conversion
+        self.la_tabla_deca["intensidad Componente Transversal (km/h)"] = conversion
 
-        return la_tabla
+        return self.la_tabla_deca
 
     def agrupar(self, intervalo):
         if self.df_final is None:
@@ -160,19 +163,19 @@ class ProcesadorDeDatos:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
         df_agrupar=self.df_final.copy()
-        conteo_viento_calma = df_agrupar[df_agrupar["Nudos"] == 0].shape[0]
-        conteo_total = df_agrupar[df_agrupar["Nudos"] > 0].shape[0]
+        conteo_viento_calma = df_agrupar[df_agrupar["Intensidad (kt)"] == 0].shape[0]
+        conteo_total = df_agrupar[df_agrupar["Intensidad (kt)"] > 0].shape[0]
 
         self.viento_calma = conteo_viento_calma
         self.suma_total_frec = conteo_total
 
-        intervalos_nudos = np.arange(0, df_agrupar['Nudos'].max() + intervalo, intervalo)
+        intervalos_nudos = np.arange(0, df_agrupar['Intensidad (kt)'].max() + intervalo, intervalo)
         
         df_agrupar['Direccion'] = self.redondear_personalizado(df_agrupar['Direccion'])
         
         df_agrupar.iloc[:, 0] = df_agrupar.iloc[:, 0].where(df_agrupar.iloc[:, 0] != 0, 360)
         df_agrupar.sort_values(by='Direccion', inplace=True)
-        df_agrupar['Intervalo_Nudos'] = pd.cut(df_agrupar['Nudos'], bins=intervalos_nudos, right=True)
+        df_agrupar['Intervalo_Nudos'] = pd.cut(df_agrupar['Intensidad (kt)'], bins=intervalos_nudos, right=True)
 
         df_agrupar['Intervalo_Nudos'] = df_agrupar['Intervalo_Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
         self.ordenado = df_agrupar.groupby(['Direccion', 'Intervalo_Nudos'], observed=False).size().unstack(fill_value=0)
@@ -226,19 +229,19 @@ class ProcesadorDeDatos:
         return self.f_ad_perso
     
     def tabla_grafico(self):
-        df_agrupar1=self.df_final.copy()
+        df_agrupar1=self.la_tabla.copy()
 
-        intervalos_nudos = [-0.1, 10] + list(np.arange(20, df_agrupar1['Nudos'].max() + 10, 10))
+        intervalos_nudos = [-0.1, 10] + list(np.arange(20, df_agrupar1['Intensidad (kt)'].max() + 10, 10))
         df_agrupar1['Direccion'] = self.redondear_personalizado(df_agrupar1['Direccion'])
         
-        df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 360)
+        #df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 36)
         df_agrupar1.sort_values(by='Direccion', inplace=True)
-        df_agrupar1['Nudos'] = pd.cut(df_agrupar1['Nudos'], bins=intervalos_nudos, right=True)
+        df_agrupar1['Intensidad (kt)'] = pd.cut(df_agrupar1['Intensidad (kt)'], bins=intervalos_nudos, right=True)
 
-        df_agrupar1['Nudos'] = df_agrupar1['Nudos'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+        df_agrupar1['Intensidad (kt)'] = df_agrupar1['Intensidad (kt)'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
         df_agrupar1['Direccion'] = ((df_agrupar1['Direccion'] - 1) // 10 * 10 + 10).astype(int)
 
-        df_agrupar1 = df_agrupar1.groupby(['Direccion', 'Nudos']).size().unstack(fill_value=0)
+        df_agrupar1 = df_agrupar1.groupby(['Direccion', 'Intensidad (kt)']).size().unstack(fill_value=0)
 
         for col in df_agrupar1.columns:
             df_agrupar1[col] = pd.to_numeric(df_agrupar1[col], errors='coerce').fillna(0)
@@ -254,6 +257,8 @@ class ProcesadorDeDatos:
         df_agrupar1 = df_agrupar1.round(2)
 
         return df_agrupar1
+         
+        
 
 class App:
     def __init__(self):
@@ -284,8 +289,8 @@ class App:
                     r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
                     theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
                     mode='lines',
-                    line=dict(color="red", width=dist),
-                    opacity=0.4,
+                    line=dict(color="green", width=dist),
+                    opacity=0.3,
                     name="Pista"
                 ))
 
@@ -343,7 +348,7 @@ class App:
                         textfont=dict(size=12, color='blue',family="Arial Black"),  # Estilo del texto
                         showlegend=False  # No mostrar en la leyenda
                     ))
-                elif 0<valor<0.1:
+                elif 0<=valor<0.1:
                     fig.add_trace(go.Scatterpolar(
                         r=[radio+5],  # Usar el radio calculado
                         theta=[direcciones[j]],  # Dirección correspondiente
@@ -391,15 +396,18 @@ class App:
         if uploaded_file is not None:
             self.resultados = ProcesadorDeDatos()
             self.resultados.cargar_archivo(uploaded_file)
-
+            
             if self.resultados.verificacion_exitosa:
+                
                 with st.container():
                     self.intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
                     self.dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
                     self.limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
-                    
+                    #self.dir_vientos=st.sidebar.number_input("direcciond el viento", min_value=1, max_value=360, value=1)
+                    #self.nudo=st.sidebar.number_input("intensidad (kt)", min_value=0, max_value=360, value=0)
 
             # Solo muestra el botón "Agrupar" después de verificar la carga del archivo
+                
                 if st.button("Resultado"):
                     agrupacion = self.resultados.agrupar(self.intervalos)
                     nueva_tabla= self.resultados.nu_tabla(self.limites,self.dir_pista)
@@ -416,6 +424,9 @@ class App:
                         #viento_calma_nu=len(nueva_tabla[nueva_tabla["Nudos"]==0])
                         coheficiente=self.resultados.coheficiente_nu
                         frec_con_limit=self.resultados.frec_con_limit
+                        st.session_state.df_agrupacion = agrupacion
+                        st.session_state.df_nueva_tabla = nueva_tabla
+                        st.session_state.df_nueva_tabla_1 = nueva_tabla_1
                         #la_tabla=self.resultados.la_tabla
                     # Mostrar los resultados en la interfaz
                         with st.container():
@@ -424,11 +435,14 @@ class App:
                             self.grafico() 
 
                         with st.expander("Mostrar Tablas"):
-                            col1, col2 = st.columns(2)
+                            col1, col2= st.columns(2)
                             with col1:
                                 g=len(nueva_tabla)
                                 st.write("Componente Transversal")
                                 st.write(nueva_tabla)
+                                st.write("Decagrados trasnformado")
+                                st.write(nueva_tabla_1)
+                                
                                 st.write(g)
                             with col2:
                                 st.write(f"viento calma: {viento_calma}")
@@ -438,6 +452,33 @@ class App:
                                 st.write("Frecuencias")
                                 st.dataframe(agrupacion)
                                 st.write(a)
+                        with st.expander("Pruebas"):
+                            if 'df_nueva_tabla_1' in st.session_state and st.session_state.df_nueva_tabla_1 is not None:
+                                st.dataframe(nueva_tabla_1.iloc[:,0:2])
+                                gb = GridOptionsBuilder.from_dataframe(nueva_tabla_1.iloc[:,0:2])
+                                gb.configure_selection('single')  # Selección de una sola fila
+                                grid_options = gb.build()
+
+# Mostrar la tabla y capturar la selección
+                                response = AgGrid(nueva_tabla_1.iloc[:,0:2], gridOptions=grid_options, update_mode=GridUpdateMode.SELECTION_CHANGED)
+                                if response['selected_rows']:
+                                    seleccion = response['selected_rows'][0]  # Obtiene la fila seleccionada
+                                    st.session_state.seleccionada = seleccion
+                                    valor1, valor2 = seleccion['Direccion'], seleccion['Intensidad (kt)']
+
+    # Realiza un cálculo (ej. suma) y aplica la condición
+                                    calculo = valor1 + valor2
+                                    resultado = 100 if calculo <= 10 else 0
+                                    st.write(f"Resultado del cálculo: {calculo}")
+                                    st.write(f"Condición aplicada: {resultado}")
+
+                                else:
+            # Si no se ha seleccionado ninguna fila, mostramos un mensaje o manejamos de otra forma
+                                    st.write("Por favor, selecciona una fila de la tabla.")
+    # Muestra el resultado en la interfaz
+                            
+                            
+                            
                         #st.dataframe(tabla_grafico)
                         #j=tabla_grafico.iloc[:,0].sum()
                         #st.write(j)
