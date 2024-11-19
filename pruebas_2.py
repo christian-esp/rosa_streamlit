@@ -10,15 +10,91 @@ st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
 image_path = "images/logo.png" 
  # Reemplaza con el nombre de tu imagen
-st.sidebar.image(image_path, width=200) 
-st.title("ANALISIS DE VIENTOS")
+#st.sidebar.image(image_path, width=200) 
+st.sidebar.markdown(
+    f"""
+    <style>
+        .sidebar-img {{
+            display: flex;
+            justify-content: center;
+            margin-top: -90px;  /* Ajusta este valor para mover más hacia arriba */
+            margin-bottom: -2px; /* Espaciado con otros elementos */
+        }}
+        .sidebar-img img {{
+            width: 150px;  /* Ancho de la imagen */
+            height: auto;
+        }}
+    </style>
+    <div class="sidebar-img">
+        <img src="data:image/png;base64,{base64.b64encode(open(image_path, "rb").read()).decode()}">
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
+        .main-title {
+            margin-top: -55px;  /* Ajusta este valor para mover más hacia arriba */
+            text-align: center; /* Centra el título horizontalmente */
+        }
+    </style>
+    <h1 class="main-title">ANÁLISIS DE VIENTOS</h1>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
+    /* Cambiar el ancho de la barra lateral */
+    [data-testid="stSidebar"] {
+        width: 250px;  /* Fija el ancho deseado */
+        min-width: 250px;  /* Establece un mínimo consistente */
+        max-width: 250px;  /* Evita que se pueda redimensionar */
+    }
+    
+    /* Ajustar widgets dentro de la barra lateral */
+    .stSidebar div.stSlider, .stSidebar div.stNumberInput, .stSidebar div.stFileUploader {
+        width: 100% !important;  /* Ajustar el ancho de los widgets */
+        margin: 0 auto;  /* Centrar los widgets */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
+    [data-testid="stExpander"] > div:nth-child(2) {
+        overflow-y: scroll;
+        max-height: 500px; /* Cambia el tamaño máximo */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+st.markdown(
+    """
+    <style>
+        /* Mover el file_uploader hacia arriba */
+        .stFileUploader {
+            margin-top: -80px;  /* Ajusta el valor según necesites */
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
  
 class ProcesadorDeDatos:
     def __init__(self):
         self.df_final = None
         self.verificacion_exitosa = False
         self.data_procesada=False
-
+        self.df_nu_tabla=None
     
     def cargar_archivo(self, archivo):
         """Carga un archivo y verifica su validez."""
@@ -84,7 +160,7 @@ class ProcesadorDeDatos:
             raise ArchivoInvalidoError("\n".join(errores))
         
     
-    def nu_tabla_deca(self, limite, pista):
+    def nu_tabla_deca(self, pista):
         if self.df_final is None:
             st.error("Debe cargar un archivo primero.")
             return
@@ -92,29 +168,189 @@ class ProcesadorDeDatos:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
         
-        df_nu_tabla=self.df_final.copy()
-        diferencia=df_nu_tabla["Direccion"] - pista
+            
+        self.df_nu_tabla=self.df_final.copy()
+        diferencia=self.df_nu_tabla["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
         seno=np.abs(seno) 
-        y=seno*df_nu_tabla["Intensidad (kt)"]
-        #comp_transv=pd.DataFrame(y,columns=["Intensidad\nComponente transversal"])
-        #la_tabla = pd.concat([df_nu_tabla, comp_transv], axis=1)
+        y=seno*self.df_nu_tabla["Intensidad (kt)"]
+        self.df_nu_tabla["Componente Transversal (kt)"]=y
 
-        #self.frec_con_limit=len(la_tabla[la_tabla["Intensidad\nComponente transversal"]<=limite])
-        #self.coheficiente_nu=round((self.frec_con_limit/total_datos)*100,2)
+        return self.df_nu_tabla
 
-        #conversion=la_tabla["Intensidad\nComponente transversal"]*1.852
-        
-        #la_tabla["intensidad Componente Transversal (km/h)"] = conversion
-
-        return y
+    def redondear_personalizado(self, numeros):
+        parte_decimal = numeros - np.floor(numeros)
+        return np.where(parte_decimal >= 0.5, np.ceil(numeros), np.floor(numeros))
     
-class App:
-    def __init__(self):
-        self.resultados=ProcesadorDeDatos()
+    def coheficiente(self,limite):
+        if self.df_nu_tabla is None:
+            st.error("Los datos no han sido procesados correctamente. Por favor, verifique los pasos anteriores.")
+            return None
+        datos_totales= len(self.df_nu_tabla)
+        datos_filtrados=self.df_nu_tabla[self.df_nu_tabla["Componente Transversal (kt)"]<=limite]
+        len_datos_filtrados=len(datos_filtrados)
+        coheficiente= (len_datos_filtrados/datos_totales) * 100
+        return round(coheficiente,2)
 
-    def grafico(self,tablita,pista,limite):
+
+    def tabla_grafico(self):
+        if self.df_nu_tabla is not None:
+        
+        
+            self.df_nu_tabla['Intensidad (kt)'] = pd.to_numeric(self.df_nu_tabla['Intensidad (kt)'], errors='coerce')
+
+            intervalos_nudos = [-0.1, 10] + list(np.arange(20, self.df_nu_tabla['Intensidad (kt)'].max() + 10, 10))
+            self.df_nu_tabla['Direccion'] = self.redondear_personalizado(self.df_nu_tabla['Direccion'])
+        
+        #df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 36)
+            self.df_nu_tabla.sort_values(by='Direccion', inplace=True)
+            self.df_nu_tabla['Intensidad (kt)'] = pd.cut(self.df_nu_tabla['Intensidad (kt)'], bins=intervalos_nudos, right=True)
+
+            self.df_nu_tabla['Intensidad (kt)'] = self.df_nu_tabla['Intensidad (kt)'].apply(lambda x: f"{int(x.left)}-{int(x.right)}")
+            self.df_nu_tabla['Direccion'] = ((self.df_nu_tabla['Direccion'] - 1) // 10 * 10 + 10).astype(int)
+
+            self.df_nu_tabla = self.df_nu_tabla.groupby(['Direccion', 'Intensidad (kt)']).size().unstack(fill_value=0)
+
+            for col in self.df_nu_tabla.columns:
+                self.df_nu_tabla[col] = pd.to_numeric(self.df_nu_tabla[col], errors='coerce').fillna(0)
+
+    # Convertir a float para operaciones de porcentaje
+            self.df_nu_tabla = self.df_nu_tabla.astype(float)
+            suma_con_ceros=len(self.df_final)
+
+    # Realizar el cálculo de porcentaje
+            self.df_nu_tabla = (self.df_nu_tabla / suma_con_ceros) * 100
+
+    # Redondear a 2 decimales
+            self.df_nu_tabla = self.df_nu_tabla.round(2)
+       
+
+        return self.df_nu_tabla
+    
+
+    def grafico(self,pista,limite):
+        fig = go.Figure()
+        df_graf=self.df_nu_tabla
+       
+        # Agregar una línea que cruza desde la dirección de la pista hasta la dirección opuesta
+        angulo_pista = pista    # Dirección ingresada por el usuario
+        angulo_opuesto = (angulo_pista + 180) % 360  # Dirección opuesta
+
+        limite_knots = {
+            (10, 11): 107,
+            (12, 13): 125,
+            (14, 20): 210
+        }
+
+        # Línea que va de la dirección de la pista a su dirección opuesta
+        for (lower_limit, upper_limit), dist in limite_knots.items():
+            if lower_limit <= limite <= upper_limit:
+                fig.add_trace(go.Scatterpolar(
+                    r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
+                    theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
+                    mode='lines',
+                    line=dict(color="green", width=dist),
+                    opacity=0.3,
+                    name="Pista"
+                ))
+
+        limite_rango = {
+            (10, 11): 59,
+            (12, 13): 69,
+            (14, 20): 116
+        }
+
+# Iterar sobre los rangos y agregar las líneas
+        for (lower_limit, upper_limit), r in limite_rango.items():
+            if lower_limit <= limite <= upper_limit:
+   
+                for offset in [-10, 10]:  # Desplazamientos para las líneas
+                    fig.add_trace(go.Scatterpolar(
+                        r=[r, r],  # Desde el centro hasta el borde
+                        theta=[angulo_pista + offset, angulo_opuesto - offset],  # Ángulos de inicio y fin
+                        mode='lines',
+                        line=dict(color="green", width=2),
+                        showlegend=False
+                        
+                    ))
+                    
+
+        suma_0_10 = df_graf.iloc[:,0].sum()
+        if suma_0_10 > 0:  # Solo mostrar la suma si es mayor que cero
+            fig.add_trace(go.Scatterpolar(
+                r=[0],  # Ubicar en el centro
+                theta=[0],  # Posición horizontal para el texto
+                mode='text',  # Modo de texto
+                text=[f"{suma_0_10:.2f}"],  # Anotación con la suma
+                textposition='middle center',  # Centrar el texto en el círculo
+                textfont=dict(size=20, color='black', family="Arial Black"),  # Estilo del texto
+                showlegend=False  # No mostrar en la leyenda
+            ))
+
+
+        for i in range(1, df_graf.shape[1]):  # Empezar en 1 para ignorar la primera columna (0-10)
+            intervalo_nudos = df_graf.columns[i]  # Nombre de la columna actual
+            intensidades = df_graf.iloc[:, i].values  # Valores radiales (porcentajes)
+            direcciones = df_graf.index  # Índices del DataFrame son las direcciones en grados
+
+        # Calcular el radio correspondiente para el intervalo de nudos
+            radio = (i) * 10  # Cada intervalo de nudos se asocia a un radio específico
+
+        # Mostrar los valores individuales en cada dirección para los intervalos a partir de 10-20
+            for j, valor in enumerate(intensidades):
+                if valor >= 0.1:  # Solo mostrar si el valor es mayor que cero
+                    fig.add_trace(go.Scatterpolar(
+                        r=[radio+5],  # Usar el radio calculado
+                        theta=[direcciones[j]],  # Dirección correspondiente
+                        mode='text',  # Modo de texto
+                        text=[f"{valor:.2f}"],  # Anotación con el valor individual
+                        textposition='middle center',  # Centrar el texto en la dirección
+                        textfont=dict(size=12, color='blue',family="Arial Black"),  # Estilo del texto
+                        showlegend=False  # No mostrar en la leyenda
+                    ))
+                elif 0<valor<0.1:
+                    fig.add_trace(go.Scatterpolar(
+                        r=[radio+5],  # Usar el radio calculado
+                        theta=[direcciones[j]],  # Dirección correspondiente
+                        mode='text',  # Modo de texto
+                        text=["+"],  # Anotación con el valor individual
+                        textposition='middle center',  # Centrar el texto en la dirección
+                        textfont=dict(size=13, color='black', family='Arial Black'),  # Estilo del texto
+                        showlegend=False  # No mostrar en la leyenda
+                    ))
+
+        
+        # Configuración del gráfico polar
+        fig.update_layout(
+            polar=dict(
+                angularaxis=dict(
+                    direction="clockwise",
+                    rotation=90,
+                    dtick=10,
+                    tickmode='array',
+                    tickvals=[i for i in range(0, 360, 10)],
+                    ticktext=[f"{i}" if i > 0 else "360" for i in range(0, 360, 10)]
+                ),
+                radialaxis=dict(
+                    title="Nudos",
+                    range=[0, 50],  # Ajusta el rango según tus datos
+                    tickvals=[10, 20, 30, 40, 50],
+                )
+            ),
+            
+            width=700,
+            height=700
+        )
+        config = {
+            'scrollZoom': False,      # Desactiva el zoom con scroll
+            'displayModeBar': False,  # Oculta la barra de herramientas
+            'staticPlot': True        # Convierte el gráfico en estático
+        }
+        # Mostrar el gráfico en Streamlit
+        st.plotly_chart(fig, config=config)
+
+    def grafico1(self,tablita,pista,limite):
         fig = go.Figure()
         #tabla_para_puntos=tablita
         #df_graf=self.resultados.tabla_grafico()
@@ -128,10 +364,10 @@ class App:
             (12, 13): 125,
             (14, 20): 210
         }
-        limites=limite
+        #limites=limite
         # Línea que va de la dirección de la pista a su dirección opuesta
         for (lower_limit, upper_limit), dist in limite_knots.items():
-            if lower_limit <= limites <= upper_limit:
+            if lower_limit <= limite <= upper_limit:
                 fig.add_trace(go.Scatterpolar(
                     r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
                     theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
@@ -148,7 +384,7 @@ class App:
         }
 # Iterar sobre los rangos y agregar las líneas
         for (lower_limit, upper_limit), r in limite_rango.items():
-            if lower_limit <= limites <= upper_limit:
+            if lower_limit <= limite <= upper_limit:
    
                 for offset in [-10, 10]:  # Desplazamientos para las líneas
                     fig.add_trace(go.Scatterpolar(
@@ -217,40 +453,64 @@ class App:
         }
         # Mostrar el gráfico en Streamlit
         st.plotly_chart(fig, config=config)
-    
 
-        
 #intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
-uploaded_file = st.sidebar.file_uploader("Seleccionar archivo Excel o CSV", type=["xlsx", "csv"], key="file_uploader_1")
+
+uploaded_file = st.file_uploader("", type=["xlsx", "csv"], key="file_uploader_1")
 dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
 limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
 
+
+if "tabla_original" not in st.session_state:
+    st.session_state["tabla_original"] = None
+if "tabla_procesada" not in st.session_state:
+    st.session_state["tabla_procesada"] = None
+if "fila_seleccionada" not in st.session_state:
+    st.session_state["fila_seleccionada"] = None
+
 #SI APRETO EL BOTON DE CARGA DE ARCHIVO:
+resultados = ProcesadorDeDatos()
 col1, col2 = st.columns(2)
+
 if uploaded_file is not None:
-    resultados = ProcesadorDeDatos()
-    tabla_original=resultados.cargar_archivo(uploaded_file)
-    st.sidebar.success("El archivo se procesó correctamente.")
-    with col1:
-        with st.expander("TABLA ORIGINAL"):
-            st.dataframe(tabla_original)
+    #if st.session_state["tabla_procesada"] is None:
     
+    tablita=resultados.tabla_grafico()
+    tabla_original=resultados.cargar_archivo(uploaded_file)
+    if tabla_original is not None:
+        st.session_state["tabla_original"]=tabla_original.copy()
+    if st.session_state["tabla_original"] is not None:
+        tabla_original=st.session_state["tabla_original"]
+        st.expander("Tabla Original").dataframe(tabla_original)
 
-    if st.sidebar.button("Resultados"):
-        if tabla_original is not None:
-            tabla_procesada=resultados.nu_tabla_deca(limites, dir_pista)
-            tabla_procesada=pd.DataFrame(tabla_procesada)
-            tabla_procesada = tabla_procesada.rename(columns={
-                tabla_procesada.columns[0]: 'Componente Transversal (kt)'
-            })
-            with col2:
-                with st.expander("TABLA PROCESADA"):
-                    st.dataframe(tabla_procesada)
+        if st.sidebar.button("Resultados"):
 
-
-
-
-
-
+            tabla_procesada = resultados.nu_tabla_deca(dir_pista)
+            if tabla_procesada is not None:
+                st.session_state["tabla_procesada"] = tabla_procesada
         
-       
+            if tabla_procesada is not None:
+                tabla_procesada=st.session_state.get("tabla_procesada")
+                st.expander("Tabla Procesada").dataframe(tabla_procesada)
+                cohe=resultados.coheficiente(limites)
+                if cohe is not None:
+                    st.markdown(f"**Coeficiente de utilización:** {cohe}%")
+
+            fila_seleccionada = st.selectbox(
+                "Seleccione una fila para mostrar sus valores:",
+                options=tabla_original.index,
+                index=(0),  # Default a la fila seleccionada
+                key="fila_seleccionadaZ"
+            )
+
+        # Actualizar el estado si se cambia la selección
+            if fila_seleccionada != st.session_state.get("fila_seleccionada"):
+                st.session_state["fila_seleccionada"] = fila_seleccionada
+
+            # Mostrar valor de la columna índice 2 para la fila seleccionada
+                valor_columna_2 = tabla_procesada.iloc[fila_seleccionada, 2]  # Índice de la columna ajustable
+                st.write(f"**Valor de la columna índice 2 para la fila seleccionada:** {valor_columna_2}")
+        else:
+            st.warning("La tabla procesada no está disponible. Por favor, genere los resultados.")
+    else:
+        st.warning("Por favor, cargue un archivo primero.")
