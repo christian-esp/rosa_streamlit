@@ -175,14 +175,24 @@ class ProcesadorDeDatos:
         data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
         y=seno*data_base["Intensidad (kt)"]
         y.name = "Componente Transversal (kt)"
+        y=y.to_frame()
+        def highlight_values(val):
+            if val > limites:
+                return "background-color: red; color: white;"
+            else:
+                return "background-color: green; color: white;"
 
-        return y
+        styled_y = y.style.applymap(highlight_values, subset=["Componente Transversal (kt)"])
+
+        return y, styled_y
+
 
     def redondear_personalizado(self, numeros):
         parte_decimal = numeros - np.floor(numeros)
         return np.where(parte_decimal >= 0.5, np.ceil(numeros), np.floor(numeros))
     
     def coheficiente(self,limite,comp_transv):
+        
         if comp_transv is None:
             st.error("Los datos no han sido procesados correctamente. Por favor, verifique los pasos anteriores.")
             return None
@@ -191,7 +201,7 @@ class ProcesadorDeDatos:
         datos_filtrados1=(datos_filtrados / datos_totales)*100
         #len_datos_filtrados=len(datos_filtrados)
         #coheficiente= (len_datos_filtrados/datos_totales) * 100
-        return datos_filtrados1.round(2)
+        return datos_filtrados1.iloc[0].round(2)
 
     def tabla_grafico(self,tabla):
         tabla_para_grafico=tabla
@@ -351,10 +361,7 @@ class ProcesadorDeDatos:
 
     def grafico1(self,tablita_df,pista,limite):
         fig = go.Figure()
-        #tabla_para_puntos=tablita
-        #df_graf=self.resultados.tabla_grafico()
-
-        # Agregar una línea que cruza desde la dirección de la pista hasta la dirección opuesta
+       
         angulo_pista = pista  # Dirección ingresada por el usuario
         angulo_opuesto = (angulo_pista + 180) % 360  # Dirección opuesta
 
@@ -363,8 +370,7 @@ class ProcesadorDeDatos:
             (12, 13): 125,
             (14, 20): 210
         }
-        #limites=limite
-        # Línea que va de la dirección de la pista a su dirección opuesta
+
         for (lower_limit, upper_limit), dist in limite_knots.items():
             if lower_limit <= limite <= upper_limit:
                 fig.add_trace(go.Scatterpolar(
@@ -395,7 +401,7 @@ class ProcesadorDeDatos:
                         
                     ))                   
         #x=tabla_para_puntos[["Direccion","Intensidad (kt)"]]
-        tickvals = [10, 20, 30, 40, 50]
+        tickvals = [0,10, 20, 30, 40, 50]
         tablita_df = tablita_df.to_frame().T 
         for _, row in tablita_df.iterrows():
             angulo_viento = row["Direccion"]
@@ -415,11 +421,14 @@ class ProcesadorDeDatos:
                     radio = limite_inferior + (posicion_relativa * (limite_superior - limite_inferior))
             
             # Agregar el punto al gráfico
+
+    
+
                     fig.add_trace(go.Scatterpolar(
                         r=[radio],
                         theta=[angulo_viento],
                         mode='markers',
-                        marker=dict(symbol='circle', color='red', size=4),
+                        marker=dict(symbol='circle', color="black", size=4),
                         showlegend=False
                     ))
                     break 
@@ -494,9 +503,11 @@ if uploaded_file is not None:
                 st.expander("Tabla Original").dataframe(tabla_original)
 
             with col2:
-                pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
+                #pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
+                pa_el_box, comp_transv_styled = resultados.nu_tabla_deca(dir_pista,copia)
+                st.write()
 
-                st.expander("Tabla Procesada").dataframe(pa_el_box)
+                st.expander("Tabla Procesada").dataframe(comp_transv_styled)
             
             cohe=resultados.coheficiente(limites,pa_el_box)
             if cohe is not None:
