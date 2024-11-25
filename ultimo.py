@@ -1,10 +1,12 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import os
 import base64
+import matplotlib.pyplot as plt
+from io import BytesIO
+from matplotlib.lines import Line2D 
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
@@ -89,12 +91,17 @@ st.markdown(
     unsafe_allow_html=True
 )
  
+class ArchivoInvalidoError(Exception):
+    """Excepción personalizada para archivos inválidos."""
+    pass
+
 class ProcesadorDeDatos:
     def __init__(self):
         self.df_final = None
         self.verificacion_exitosa = False
         self.data_procesada=False
         self.df_nu_tabla=None
+    
     
     def cargar_archivo(self, archivo):
         """Carga un archivo y verifica su validez."""
@@ -113,6 +120,8 @@ class ProcesadorDeDatos:
                 self.verificacion_exitosa = True
                 #st.success("El archivo se procesó correctamente.")
                 if (self.df_final['Direccion'].abs() >= 100).any():
+                    self.df_final.loc[(self.df_final['Direccion'] >= 0) & (self.df_final['Direccion'] < 0.5), 'Direccion'] = 360
+
                     return self.df_final
                 else:
                 
@@ -167,7 +176,8 @@ class ProcesadorDeDatos:
         elif not self.verificacion_exitosa:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
-        
+
+
         diferencia=data_base["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
@@ -206,11 +216,13 @@ class ProcesadorDeDatos:
     def tabla_grafico(self,tabla):
         tabla_para_grafico=tabla
         total_datos_orgin=len(tabla_para_grafico)
+
         
         tabla_para_grafico['Intensidad (kt)'] = pd.to_numeric(tabla_para_grafico['Intensidad (kt)'], errors='coerce')
 
         intervalos_nudos = [-0.1, 10] + list(np.arange(20, tabla_para_grafico['Intensidad (kt)'].max() + 10, 10))
         tabla_para_grafico['Direccion'] = self.redondear_personalizado(tabla_para_grafico['Direccion'])
+        
         
         #df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 36)
         tabla_para_grafico.sort_values(by='Direccion', inplace=True)
@@ -232,9 +244,120 @@ class ProcesadorDeDatos:
 
         return tabla_para_grafico.round(2)
     
+    def grafico(self,pista,df_graf1):
+    # Crear la figura y el eje polar
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(3, 3))
 
+        # Direcciones en radianes
+        direcciones = np.radians(df_graf1.index)  # Convertir grados a radianes
+        
+        # Iterar sobre las columnas del DataFrame
+        for i in range(1, df_graf1.shape[1]):
+            # Obtener el radio y los valores correspondientes
+            radio = (i) * 10
+            valores = df_graf1.iloc[:, i]
 
-    def grafico(self,pista,limite,df_graf):
+            # Graficar los valores para cada intervalo
+            #ax.scatter(direcciones, [radio] * len(valores), c='blue', s=20, label=f'{df_graf1.columns[i]} nudos')
+            
+            # Agregar los textos
+            for j, valor in enumerate(valores):
+                if valor > 0.1:
+                    angulo_grados = np.degrees(direcciones[j])  # Convertir de radianes a grados
+                    posicion_radial = radio + 5
+                    rotacion = angulo_grados if angulo_grados <= 180 else angulo_grados - 360 
+                    if angulo_grados == 180:  # Para 0º (Norte) y 180º (Sur), texto vertical
+                        rotacion = 90
+                    elif angulo_grados == 360:  # Para 0º (Norte) y 180º (Sur), texto vertical
+                        rotacion = 270
+                    elif angulo_grados == 90 or angulo_grados == 270:  # Para 90º (Este) y 270º (Oeste), texto horizontal
+                        rotacion = 0
+                    elif 290 <= angulo_grados < 300:
+                        rotacion +=50
+                    elif 230 <= angulo_grados < 240:
+                        rotacion +=180
+                    elif 250 <= angulo_grados < 260:
+                        rotacion +=120
+                    elif 200 <= angulo_grados < 210:
+                        rotacion +=220
+                    elif 340 <= angulo_grados < 350:
+                        rotacion +=300
+                    elif 70 <= angulo_grados < 80:
+                        rotacion +=300
+                    elif 110 <= angulo_grados < 120:
+                        rotacion +=220
+                    elif 140 <= angulo_grados < 150:
+                        rotacion +=180
+                    elif 160 <= angulo_grados < 170:
+                        rotacion +=140
+                    elif 20 <= angulo_grados < 30:
+                        rotacion +=40
+                    elif 320 <= angulo_grados < 330:
+                        rotacion +=0
+                    elif 350 <= angulo_grados < 360:
+                        rotacion +=300
+                    elif 10 <= angulo_grados < 20:
+                        rotacion +=70
+                
+
+                    ax.text(
+                        direcciones[j],
+                        posicion_radial,  # Desplazar el texto ligeramente afuera
+                        f"{valor:.2f}%",
+                        fontsize=3.3,
+                        rotation=rotacion,  # Mantener el texto vertical
+                        ha='center',
+                        va='center',
+                        rotation_mode='anchor' ,
+                        fontweight='bold',  # Texto en negrita
+                        color='blue'
+                    )
+
+        # Agregar línea para la dirección de la pista
+        angulo_pista_rad = np.radians(dir_pista)
+    
+    # Rango para la línea de la pista (desde el centro hasta el borde exterior)
+        max_radio = 50  # El máximo valor radial (el borde exterior)
+    
+    # Trazar la línea verde desde el centro hasta el borde exterior en la dirección de la pista
+        ax.plot([angulo_pista_rad, angulo_pista_rad], [0, max_radio], color='green', lw=35, alpha=0.3, label=f"Pista {dir_pista}°")
+
+    # Trazar la línea opuesta de la pista
+        angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)  # Dirección opuesta (180 grados)
+        ax.plot([angulo_opuesto_rad, angulo_opuesto_rad], [0, max_radio], color='green', lw=35,alpha=0.3)
+        legend_line = Line2D([0], [0], color='green', lw=2, alpha=0.6)
+
+        # Configurar ejes
+        ax.set_theta_zero_location("N")  # Norte en la parte superior
+        ax.set_theta_direction(-1)  # Dirección en sentido horario
+        ax.set_xticks(np.radians(range(0, 360, 10)))
+        ax.set_yticks(range(10, 51, 10))
+        ax.set_ylim(0, 50)
+
+        labels = ['360' if i == 0 else str(i) for i in range(0, 360, 10)] 
+        ax.set_xticklabels(labels)
+
+        ax.tick_params(axis='y', colors='black',labelsize=3)
+        plt.setp(ax.get_yticklabels(), fontweight='bold', fontsize=3)
+
+        ax.tick_params(axis='x', labelsize=5)
+        ax.grid(True)
+
+        # Títulos y leyenda
+        ax.set_title("Rosa de los Vientos", va='bottom',fontsize=10)
+        ax.legend([legend_line], [f"Pista {dir_pista}°"], loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
+        #ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+
+        # Mostrar el gráfico en Streamlit
+        st.image(buf)
+
+    def grafico_bueno(self,pista,limite,df_graf):
         fig = go.Figure()
         #df_graf=self.df_nu_tabla
        
@@ -510,7 +633,9 @@ if uploaded_file is not None:
             df_graf=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
             with st.expander("GRAFICO"):
-                resultados.grafico(dir_pista,limites,df_graf)
+                resultados.grafico(dir_pista,df_graf)
+            st.dataframe(df_graf)
+            
 
     if page=="Pruebas individuales": 
         with results_container:          
@@ -552,3 +677,4 @@ if uploaded_file is not None:
                     st.write("Coheficiente de utilización: 0")
                 with st.expander("GRAFICO_1"):
                     resultados.grafico1(componente,dir_pista,limites)
+                
