@@ -2,11 +2,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import os
 import base64
 import matplotlib.pyplot as plt
 from io import BytesIO
 from matplotlib.lines import Line2D 
+from st_aggrid import AgGrid, GridOptionsBuilder
+
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
@@ -101,6 +102,7 @@ class ProcesadorDeDatos:
         self.verificacion_exitosa = False
         self.data_procesada=False
         self.df_nu_tabla=None
+        self.valores_validos = set(range(10, 361, 10))
     
     
     def cargar_archivo(self, archivo):
@@ -118,11 +120,28 @@ class ProcesadorDeDatos:
                 self.df_final.columns = ['Direccion', 'Intensidad (kt)']
                 self.data_procesada = True
                 self.verificacion_exitosa = True
-                #st.success("El archivo se procesó correctamente.")
-                if (self.df_final['Direccion'].abs() >= 100).any():
-                    self.df_final.loc[(self.df_final['Direccion'] >= 0) & (self.df_final['Direccion'] < 0.5), 'Direccion'] = 360
+                direcciones_validas = set(range(0, 361, 10))  # Conjunto con las direcciones válidas (10, 20, ..., 360)
+                direcciones_en_df = set(self.df_final['Direccion'])  # Conjunto con las direcciones en el DataFrame
+
+# Paso 2: Verificar si hay direcciones que faltan
+                direcciones_faltantes = direcciones_validas - direcciones_en_df
+                
+                
+                if (self.df_final['Direccion'].abs() >= 100).any() and not direcciones_faltantes:
+                    #self.df_final.loc[(self.df_final['Direccion'] >= 0) & (self.df_final['Direccion'] < 0.5), 'Direccion'] = 360
+                    self.df_final["Direccion"]= self.df_final["Direccion"].replace(0, 360)
+                    
+                    return self.df_final
+                
+                elif (self.df_final['Direccion'].abs() >= 100).any() and direcciones_faltantes:
+                    df_faltantes = pd.DataFrame({'Direccion': list(direcciones_faltantes), 'Intensidad (kt)': [0] * len(direcciones_faltantes)})
+
+    # Paso 4: Concatenar las direcciones faltantes al DataFrame original
+                    self.df_final = pd.concat([self.df_final, df_faltantes], ignore_index=True)
+                    self.df_final["Direccion"]= self.df_final["Direccion"].replace(0, 360)
 
                     return self.df_final
+                 
                 else:
                 
                     self.df_final["Direccion"]= self.df_final["Direccion"].replace(0, 36)
@@ -219,6 +238,7 @@ class ProcesadorDeDatos:
 
         intervalos_nudos = [-0.1, 10] + list(np.arange(20, tabla_para_grafico['Intensidad (kt)'].max() + 10, 10))
         tabla_para_grafico['Direccion'] = self.redondear_personalizado(tabla_para_grafico['Direccion'])
+        tabla_para_grafico["Direccion"]= tabla_para_grafico["Direccion"].replace(0, 360)
         
         tabla_para_grafico.sort_values(by='Direccion', inplace=True)
         tabla_para_grafico['Intensidad (kt)'] = pd.cut(tabla_para_grafico['Intensidad (kt)'], bins=intervalos_nudos, right=True)
@@ -238,7 +258,7 @@ class ProcesadorDeDatos:
     
     ###################################### GRAFICOS ######################################
 
-    def grafico_principal(self,pista,df_graf1):
+    def grafico_principal(self,dir_pista,limite,df_graf1):
     # Crear la figura y el eje polar
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(3, 3))
 
@@ -311,9 +331,11 @@ class ProcesadorDeDatos:
     
     # Trazar la línea opuesta de la pista
         angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)  # Dirección opuesta (180 grados)
-        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [40, 50], color='green', lw=35,alpha=0.3)
+        grosor = 3.5 * (limite - 10) + 35
+
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [40, 50], color='green', lw=grosor, alpha=0.3)
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [50, 50], linestyle='--', color='green', lw=1, alpha=0.7)
         legend_line = Line2D([0], [0], color='green', lw=2, alpha=0.6)
-        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [50, 50], linestyle='--',color='green', lw=1,alpha=0.7)
 
         # Configurar ejes
         ax.set_theta_zero_location("N")  # Norte en la parte superior
@@ -334,7 +356,7 @@ class ProcesadorDeDatos:
         # Títulos y leyenda
         ax.set_title("Rosa de los Vientos", va='bottom',fontsize=10)
         ax.legend([legend_line], [f"Pista {dir_pista}°"], loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
-        #ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
+        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
 
         buf = BytesIO()
@@ -377,7 +399,7 @@ class ProcesadorDeDatos:
         ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
         ax.set_xlabel('Dirección (grados)') 
         ax.set_ylabel('Frecuencia') 
-        ax.legend(title='Intervalos de Nudos') 
+        ax.legend(title='Intervalos de Nudos', fontsize=5,title_fontsize=7) 
         ax.set_xticks(tabla.index)
         ax.tick_params(axis='x', rotation=90)
 
@@ -467,7 +489,7 @@ class ProcesadorDeDatos:
                     ))                   
         #x=tabla_para_puntos[["Direccion","Intensidad (kt)"]]
         tickvals = [0,10, 20, 30, 40, 50]
-        tablita_df = tablita_df.to_frame().T 
+        #tablita_df = tablita_df.to_frame().T 
         for _, row in tablita_df.iterrows():
             angulo_viento = row["Direccion"]
             intensidad = row["Intensidad (kt)"]
@@ -573,7 +595,7 @@ if uploaded_file is not None:
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
             with st.expander("GRAFICO"):
-                resultados.grafico_principal(dir_pista,df_graf)
+                resultados.grafico_principal(dir_pista,limites,df_graf)
             #st.dataframe(df_graf)
             #st.dataframe(df_graf_otro)
                               
@@ -585,38 +607,44 @@ if uploaded_file is not None:
             col1, col2 = st.columns(2)
 
             with col1:
-                st.expander("Tabla Original").dataframe(tabla_original)
+                tabla_original["Direccion"] = pd.to_numeric(tabla_original["Direccion"], errors='coerce')
+                tabla_original["Intensidad (kt)"] = pd.to_numeric(tabla_original["Intensidad (kt)"], errors='coerce')
 
-            with col2:
-                pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
+                grid_options = GridOptionsBuilder.from_dataframe(tabla_original)
+                grid_options.configure_selection('single')  # Permite seleccionar una fila
 
-            fila_seleccionada = st.selectbox(
-                "Seleccione una fila para mostrar sus valores:",
-                options=copia.index,
-                index=(0),  # Default a la fila seleccionada
-                key="fila_seleccionada")
+# Renderizamos la tabla con Ag-Grid
+                grid_response = AgGrid(tabla_original, gridOptions=grid_options.build())
+
+# Extraemos el índice de la fila seleccionada
+                fila_seleccionada_aggrid = grid_response['selected_rows']
+
+                #st.expander("Tabla Original").dataframe(grid_response)
+                if fila_seleccionada_aggrid is not None and len(fila_seleccionada_aggrid) > 0:
+                    
+                    #fila_seleccionada = fila_seleccionada_aggrid[0]
+                    direccion = fila_seleccionada_aggrid['Direccion'].values[0]
+                    intensidad_kt = fila_seleccionada_aggrid['Intensidad (kt)'].values[0]
     
-
-            if fila_seleccionada:
-                componente = copia.iloc[fila_seleccionada] 
-                #componente = componente.to_frame()
- 
-                st.dataframe(componente)
-                diferencia=componente["Direccion"] - dir_pista
-                dif_rad= np.radians(diferencia)  # Resta del índice al valor
-                seno = np.sin(dif_rad) 
-                seno=np.abs(seno) 
-                #data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
-                y=seno*componente["Intensidad (kt)"]
-                st.write()
-                st.write(f"Componente Transversal (kt): {y.round(3)}")
-                
-                if y <= limites:
-                    st.write("Coheficiente de utilización: 100%")
-                else:
-                    st.write("Coheficiente de utilización: 0")
-                with st.expander("GRAFICO_1"):
-                    resultados.grafico1(componente,dir_pista,limites)
+    # Realiza el cálculo
+                    diferencia = direccion - dir_pista
+                    dif_rad = np.radians(diferencia)
+                    seno = np.sin(dif_rad)
+                    seno = np.abs(seno)
+                    y = seno * intensidad_kt  # Aquí 'y' será un número único
+                    with col2:
+                        st.write(fila_seleccionada_aggrid)
+                        
+    
+                        st.write(f"Componente Transversal (kt): {y.round(3)}")
+    
+    # Comparación con 'limites'
+                        if y <= limites:
+                            st.write("Coeficiente de utilización: 100%")
+                        else:
+                            st.write("Coeficiente de utilización: 0")
+                    with st.expander("GRAFICO_1"):
+                        resultados.grafico1(fila_seleccionada_aggrid,dir_pista,limites)
     
     if page=="Otros Gráficos":
         df_graf,df_graf_otro=resultados.tabla_grafico(copia)
@@ -629,7 +657,7 @@ if uploaded_file is not None:
                 resultados.plot_bar(df_graf_otro)
             with st.expander("Gráfico de Líneas"):
                 resultados.plot_line(df_graf_otro)
-            with st.expander("Gráfico de Disporsión"):
+            with st.expander("Gráfico de Dispersión"):
                 resultados.plot_scatter(df_graf_otro)
 
 
