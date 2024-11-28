@@ -177,7 +177,6 @@ class ProcesadorDeDatos:
             st.error("El archivo cargado no cumple con el formato deseado.")
             return
 
-
         diferencia=data_base["Direccion"] - pista
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
@@ -195,7 +194,6 @@ class ProcesadorDeDatos:
         styled_y = y.style.map(highlight_values, subset=["Componente Transversal (kt)"])
 
         return y, styled_y
-
 
     def redondear_personalizado(self, numeros):
         parte_decimal = numeros - np.floor(numeros)
@@ -216,15 +214,12 @@ class ProcesadorDeDatos:
     def tabla_grafico(self,tabla):
         tabla_para_grafico=tabla
         total_datos_orgin=len(tabla_para_grafico)
-
         
         tabla_para_grafico['Intensidad (kt)'] = pd.to_numeric(tabla_para_grafico['Intensidad (kt)'], errors='coerce')
 
         intervalos_nudos = [-0.1, 10] + list(np.arange(20, tabla_para_grafico['Intensidad (kt)'].max() + 10, 10))
         tabla_para_grafico['Direccion'] = self.redondear_personalizado(tabla_para_grafico['Direccion'])
         
-        
-        #df_agrupar1.iloc[:, 0] = df_agrupar1.iloc[:, 0].where(df_agrupar1.iloc[:, 0] != 0, 36)
         tabla_para_grafico.sort_values(by='Direccion', inplace=True)
         tabla_para_grafico['Intensidad (kt)'] = pd.cut(tabla_para_grafico['Intensidad (kt)'], bins=intervalos_nudos, right=True)
 
@@ -237,14 +232,13 @@ class ProcesadorDeDatos:
             tabla_para_grafico[col] = pd.to_numeric(tabla_para_grafico[col], errors='coerce').fillna(0)
 
     # Realizar el cálculo de porcentaje
-        tabla_para_grafico = (tabla_para_grafico / total_datos_orgin) * 100
+        tabla_para_grafico_1 = (tabla_para_grafico / total_datos_orgin) * 100
 
-    # Redondear a 2 decimales
-        #tabla_para_grafico = tabla_para_grafico.round(2)
-
-        return tabla_para_grafico.round(2)
+        return tabla_para_grafico_1.round(2), tabla_para_grafico
     
-    def grafico(self,pista,df_graf1):
+    ###################################### GRAFICOS ######################################
+
+    def grafico_principal(self,pista,df_graf1):
     # Crear la figura y el eje polar
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(3, 3))
 
@@ -252,13 +246,13 @@ class ProcesadorDeDatos:
         direcciones = np.radians(df_graf1.index)  # Convertir grados a radianes
         
         # Iterar sobre las columnas del DataFrame
+        suma_primera_columna = df_graf1.iloc[:, 0].sum() 
+        suma_redondeada = round(suma_primera_columna,2)
+        ax.text(0, 0, f"{suma_redondeada}%", fontsize=5, ha='center', va='center', fontweight='bold', color='blue')
         for i in range(1, df_graf1.shape[1]):
             # Obtener el radio y los valores correspondientes
             radio = (i) * 10
             valores = df_graf1.iloc[:, i]
-
-            # Graficar los valores para cada intervalo
-            #ax.scatter(direcciones, [radio] * len(valores), c='blue', s=20, label=f'{df_graf1.columns[i]} nudos')
             
             # Agregar los textos
             for j, valor in enumerate(valores):
@@ -299,7 +293,6 @@ class ProcesadorDeDatos:
                     elif 10 <= angulo_grados < 20:
                         rotacion +=70
                 
-
                     ax.text(
                         direcciones[j],
                         posicion_radial,  # Desplazar el texto ligeramente afuera
@@ -316,16 +309,11 @@ class ProcesadorDeDatos:
         # Agregar línea para la dirección de la pista
         angulo_pista_rad = np.radians(dir_pista)
     
-    # Rango para la línea de la pista (desde el centro hasta el borde exterior)
-        max_radio = 50  # El máximo valor radial (el borde exterior)
-    
-    # Trazar la línea verde desde el centro hasta el borde exterior en la dirección de la pista
-        ax.plot([angulo_pista_rad, angulo_pista_rad], [0, max_radio], color='green', lw=35, alpha=0.3, label=f"Pista {dir_pista}°")
-
     # Trazar la línea opuesta de la pista
         angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)  # Dirección opuesta (180 grados)
-        ax.plot([angulo_opuesto_rad, angulo_opuesto_rad], [0, max_radio], color='green', lw=35,alpha=0.3)
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [40, 50], color='green', lw=35,alpha=0.3)
         legend_line = Line2D([0], [0], color='green', lw=2, alpha=0.6)
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [50, 50], linestyle='--',color='green', lw=1,alpha=0.7)
 
         # Configurar ejes
         ax.set_theta_zero_location("N")  # Norte en la parte superior
@@ -357,129 +345,84 @@ class ProcesadorDeDatos:
         # Mostrar el gráfico en Streamlit
         st.image(buf)
 
-    def grafico_bueno(self,pista,limite,df_graf):
-        fig = go.Figure()
-        #df_graf=self.df_nu_tabla
-       
-        # Agregar una línea que cruza desde la dirección de la pista hasta la dirección opuesta
-        angulo_pista = pista    # Dirección ingresada por el usuario
-        angulo_opuesto = (angulo_pista + 180) % 360  # Dirección opuesta
+    def plot_bar(self,tabla): 
+        fig, ax = plt.subplots() 
+        tabla.plot(kind='bar', ax=ax, figsize=(12, 6)) 
+        ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
+        ax.set_xlabel('Dirección (grados)') 
+        ax.set_ylabel('Frecuencia') 
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+        st.image(buf)
 
-        limite_knots = {
-            (10, 11): 107,
-            (12, 13): 125,
-            (14, 20): 210
-        }
+    def plot_line(self,tabla): 
+        fig, ax = plt.subplots() 
+        tabla.plot(kind='line', ax=ax, figsize=(12, 6)) 
+        ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
+        ax.set_xlabel('Dirección (grados)') 
+        ax.set_ylabel('Frecuencia') 
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+        st.image(buf)
 
-        # Línea que va de la dirección de la pista a su dirección opuesta
-        for (lower_limit, upper_limit), dist in limite_knots.items():
-            if lower_limit <= limite <= upper_limit:
-                fig.add_trace(go.Scatterpolar(
-                    r=[50, 50],  # Se extiende desde el borde interior (10) hasta el borde exterior (50)
-                    theta=[angulo_pista, angulo_opuesto],  # Dirección de la pista hasta la opuesta
-                    mode='lines',
-                    line=dict(color="green", width=dist),
-                    opacity=0.3,
-                    name="Pista"
-                ))
+    def plot_scatter(self,tabla): 
+        fig, ax = plt.subplots() 
+        for column in tabla.columns: 
+            ax.scatter(tabla.index, tabla[column],label=column)
+        #for column in tabla.columns: ax.scatter(tabla.index, tabla[column], label=column) 
+        ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
+        ax.set_xlabel('Dirección (grados)') 
+        ax.set_ylabel('Frecuencia') 
+        ax.legend(title='Intervalos de Nudos') 
+        ax.set_xticks(tabla.index)
+        ax.tick_params(axis='x', rotation=90)
 
-        limite_rango = {
-            (10, 11): 59,
-            (12, 13): 69,
-            (14, 20): 116
-        }
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+        st.image(buf)
 
-# Iterar sobre los rangos y agregar las líneas
-        for (lower_limit, upper_limit), r in limite_rango.items():
-            if lower_limit <= limite <= upper_limit:
-   
-                for offset in [-10, 10]:  # Desplazamientos para las líneas
-                    fig.add_trace(go.Scatterpolar(
-                        r=[r, r],  # Desde el centro hasta el borde
-                        theta=[angulo_pista + offset, angulo_opuesto - offset],  # Ángulos de inicio y fin
-                        mode='lines',
-                        line=dict(color="green", width=2),
-                        showlegend=False
-                        
-                    ))
-                    
-
-        suma_0_10 = df_graf.iloc[:,0].sum()
-        if suma_0_10 > 0:  # Solo mostrar la suma si es mayor que cero
-            fig.add_trace(go.Scatterpolar(
-                r=[0],  # Ubicar en el centro
-                theta=[0],  # Posición horizontal para el texto
-                mode='text',  # Modo de texto
-                text=[f"{suma_0_10:.2f}"],  # Anotación con la suma
-                textposition='middle center',  # Centrar el texto en el círculo
-                textfont=dict(size=20, color='black', family="Arial Black"),  # Estilo del texto
-                showlegend=False  # No mostrar en la leyenda
-            ))
-
-
-        for i in range(1, df_graf.shape[1]):  # Empezar en 1 para ignorar la primera columna (0-10)
-            intervalo_nudos = df_graf.columns[i]  # Nombre de la columna actual
-            intensidades = df_graf.iloc[:, i].values  # Valores radiales (porcentajes)
-            direcciones = df_graf.index  # Índices del DataFrame son las direcciones en grados
-
-        # Calcular el radio correspondiente para el intervalo de nudos
-            radio = (i) * 10  # Cada intervalo de nudos se asocia a un radio específico
-
-        # Mostrar los valores individuales en cada dirección para los intervalos a partir de 10-20
-            for j, valor in enumerate(intensidades):
-                if valor >= 0.1:  # Solo mostrar si el valor es mayor que cero
-                    fig.add_trace(go.Scatterpolar(
-                        r=[radio+5],  # Usar el radio calculado
-                        theta=[direcciones[j]],  # Dirección correspondiente
-                        mode='text',  # Modo de texto
-                        text=[f"{valor:.2f}"],  # Anotación con el valor individual
-                        textposition='middle center',
-                          # Centrar el texto en la dirección
-                        textfont=dict(size=12, color='blue',family="Arial Black"),  # Estilo del texto
-                        showlegend=False  # No mostrar en la leyenda
-                    ))
-
-
-                elif 0<valor<0.1:
-                    fig.add_trace(go.Scatterpolar(
-                        r=[radio+5],  # Usar el radio calculado
-                        theta=[direcciones[j]],  # Dirección correspondiente
-                        mode='text',  # Modo de texto
-                        text=["+"],  # Anotación con el valor individual
-                        textposition='middle center',  # Centrar el texto en la dirección
-                        textfont=dict(size=13, color='black', family='Arial Black'),  # Estilo del texto
-                        showlegend=False  # No mostrar en la leyenda
-                    ))
-
+    def plot_polar(self,tabla): 
+        angles = np.deg2rad(tabla.index.values)
+        fig, ax = plt.subplots(figsize=(3, 3), subplot_kw={'projection': 'polar'})
         
-        # Configuración del gráfico polar
-        fig.update_layout(
-            polar=dict(
-                angularaxis=dict(
-                    direction="clockwise",
-                    rotation=90,
-                    dtick=10,
-                    tickmode='array',
-                    tickvals=[i for i in range(0, 360, 10)],
-                    ticktext=[f"{i}" if i > 0 else "360" for i in range(0, 360, 10)]
-                ),
-                radialaxis=dict(
-                    title="Nudos",
-                    range=[0, 50],  # Ajusta el rango según tus datos
-                    tickvals=[10, 20, 30, 40, 50],
-                )
-            ),
-            
-            width=700,
-            height=700
-        )
-        config = {
-            'scrollZoom': False,      # Desactiva el zoom con scroll
-            'displayModeBar': False,  # Oculta la barra de herramientas
-            'staticPlot': True        # Convierte el gráfico en estático
-        }
-        # Mostrar el gráfico en Streamlit
-        st.plotly_chart(fig, config=config)
+        # Crear colores dinámicamente para todas las columnas
+        colors = plt.cm.viridis(np.linspace(0, 1, len(tabla.columns)))
+        
+        # Ajustar el ancho de los pétalos
+        width = (2 * np.pi) / len(tabla.index)
+        max_radii = np.max(tabla.values)
+        
+        # Verificar las columnas y sus colores
+        for col, color in zip(tabla.columns, colors):
+            radii = tabla[col].values
+            ax.bar(angles, radii, width=width, edgecolor=color, color=color, alpha=0.8, label=col)
+        
+        ax.set_theta_direction(-1)
+        ax.set_theta_offset(np.pi / 2.0)
+        ax.set_thetagrids(range(0, 360, 10), labels=[f"{i}" if i != 0 else "360" for i in range(0, 360, 10)],fontsize=4)
+        
+        # Asegurar que los círculos concéntricos se muestren correctamente hasta el máximo valor de nudos
+        #rticks = np.arange(0, max_radii)
+        #ax.set_rticks(rticks)
+        ax.set_ylim(0, max_radii)
+        ax.set_rticks([])
+        ax.set_rlabel_position(-22.5)
+        
+        ax.legend(title='Intervalos de Nudos', fontsize=5, title_fontsize=5, bbox_to_anchor=(1.5, 1), loc='upper right')
+        ax.set_title('Frecuencia de Vientos por Dirección y Nudos', fontsize=5)
+        
+        # Guardar la figura en un buffer y mostrarla con Streamlit
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
+        st.image(buf)
 
     def grafico1(self,tablita_df,pista,limite):
         fig = go.Figure()
@@ -544,8 +487,6 @@ class ProcesadorDeDatos:
             
             # Agregar el punto al gráfico
 
-    
-
                     fig.add_trace(go.Scatterpolar(
                         r=[radio],
                         theta=[angulo_viento],
@@ -555,7 +496,6 @@ class ProcesadorDeDatos:
                     ))
                     break 
 
-        
         # Configuración del gráfico polar
         fig.update_layout(
             polar=dict(
@@ -585,12 +525,11 @@ class ProcesadorDeDatos:
         # Mostrar el gráfico en Streamlit
         st.plotly_chart(fig, config=config)
 
-#intervalos = st.sidebar.selectbox("Seleccione intervalo (knots)", [1, 3, 5, 10],key="intervalos")
+#####################################MOSTRAR RESULTADOS EN LA APP####################################
 
 uploaded_file = st.file_uploader("", type=["xlsx", "csv"], key="file_uploader_1")
 dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
 limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
-
 
 if "tabla_original" not in st.session_state:
     st.session_state["tabla_original"] = None
@@ -604,10 +543,11 @@ resultados = ProcesadorDeDatos()
 header_container = st.container()
 # Contenedor para los resultados
 results_container = st.container()
+otros_graficos=st.container()
 
 with header_container:
 
-    page = st.selectbox("Selecciona una opción", ["Ver Resultados", "Pruebas individuales"])
+    page = st.selectbox("Selecciona una opción", ["Ver Resultados", "Pruebas individuales","Otros Gráficos"])
 
 if uploaded_file is not None:
     tabla_original=resultados.cargar_archivo(uploaded_file)
@@ -630,12 +570,13 @@ if uploaded_file is not None:
             if cohe is not None:
                 st.markdown(f"**Coeficiente de utilización:** {cohe}%")
        
-            df_graf=resultados.tabla_grafico(copia)
+            df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
             with st.expander("GRAFICO"):
-                resultados.grafico(dir_pista,df_graf)
-            st.dataframe(df_graf)
-            
+                resultados.grafico_principal(dir_pista,df_graf)
+            #st.dataframe(df_graf)
+            #st.dataframe(df_graf_otro)
+                              
 
     if page=="Pruebas individuales": 
         with results_container:          
@@ -649,7 +590,6 @@ if uploaded_file is not None:
             with col2:
                 pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
 
-                
             fila_seleccionada = st.selectbox(
                 "Seleccione una fila para mostrar sus valores:",
                 options=copia.index,
@@ -677,4 +617,20 @@ if uploaded_file is not None:
                     st.write("Coheficiente de utilización: 0")
                 with st.expander("GRAFICO_1"):
                     resultados.grafico1(componente,dir_pista,limites)
+    
+    if page=="Otros Gráficos":
+        df_graf,df_graf_otro=resultados.tabla_grafico(copia)
+
+        with otros_graficos:
+            st.subheader("Gráficos")
+            with st.expander("Gráfico Polar"):
+                resultados.plot_polar(df_graf)
+            with st.expander("Gráfico de Barras"):
+                resultados.plot_bar(df_graf_otro)
+            with st.expander("Gráfico de Líneas"):
+                resultados.plot_line(df_graf_otro)
+            with st.expander("Gráfico de Disporsión"):
+                resultados.plot_scatter(df_graf_otro)
+
+
                 
