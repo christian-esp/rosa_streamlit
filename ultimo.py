@@ -446,7 +446,7 @@ class ProcesadorDeDatos:
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
 
-    def grafico1(self,tablita_df,pista,limite):
+    def grafico1(self,tablita_df,pista,limite,t):
         fig = go.Figure()
        
         angulo_pista = pista  # Dirección ingresada por el usuario
@@ -508,15 +508,26 @@ class ProcesadorDeDatos:
                     radio = limite_inferior + (posicion_relativa * (limite_superior - limite_inferior))
             
             # Agregar el punto al gráfico
+                    if t<=limite:
 
-                    fig.add_trace(go.Scatterpolar(
-                        r=[radio],
-                        theta=[angulo_viento],
-                        mode='markers',
-                        marker=dict(symbol='circle', color="black", size=4),
-                        showlegend=False
-                    ))
-                    break 
+                        fig.add_trace(go.Scatterpolar(
+                            r=[radio],
+                            theta=[angulo_viento],
+                            mode='markers',
+                            marker=dict(symbol='circle', color="green", size=4),
+                            showlegend=False
+                        ))
+                        break 
+                    else:
+                        fig.add_trace(go.Scatterpolar(
+                            r=[radio],
+                            theta=[angulo_viento],
+                            mode='markers',
+                            marker=dict(symbol='circle', color="red", size=4),
+                            showlegend=False
+                        ))
+                        break 
+
 
         # Configuración del gráfico polar
         fig.update_layout(
@@ -644,7 +655,7 @@ if uploaded_file is not None:
                         else:
                             st.write("Coeficiente de utilización: 0")
                     with st.expander("GRAFICO_1"):
-                        resultados.grafico1(fila_seleccionada_aggrid,dir_pista,limites)
+                        resultados.grafico1(fila_seleccionada_aggrid,dir_pista,limites,y)
     
     if page=="Otros Gráficos":
         df_graf,df_graf_otro=resultados.tabla_grafico(copia)
