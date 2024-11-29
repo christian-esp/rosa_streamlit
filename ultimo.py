@@ -354,7 +354,7 @@ class ProcesadorDeDatos:
         ax.grid(True)
 
         # Títulos y leyenda
-        ax.set_title("Rosa de los Vientos", va='bottom',fontsize=10)
+        ax.set_title("Rosa de los Vientos", va='bottom',fontsize=7)
         ax.legend([legend_line], [f"Pista {dir_pista}°"], loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
         ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
         plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
@@ -446,7 +446,7 @@ class ProcesadorDeDatos:
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
 
-    def grafico1(self,tablita_df,pista,limite,t):
+    def grafico1(self,intensidad,angulo_viento,pista,limite,t):
         fig = go.Figure()
        
         angulo_pista = pista  # Dirección ingresada por el usuario
@@ -489,44 +489,40 @@ class ProcesadorDeDatos:
                     ))                   
         #x=tabla_para_puntos[["Direccion","Intensidad (kt)"]]
         tickvals = [0,10, 20, 30, 40, 50]
-        #tablita_df = tablita_df.to_frame().T 
-        for _, row in tablita_df.iterrows():
-            angulo_viento = row["Direccion"]
-            intensidad = row["Intensidad (kt)"]
-    
+        
     # Determinar el rango correspondiente para la intensidad
-            for i in range(len(tickvals) - 1):
-                limite_inferior = tickvals[i]
-                limite_superior = tickvals[i + 1]
+        for i in range(len(tickvals) - 1):
+            limite_inferior = tickvals[i]
+            limite_superior = tickvals[i + 1]
         
         # Verificar si la intensidad cae dentro del rango actual
-                if limite_inferior <= intensidad <= limite_superior:
+            if limite_inferior <= intensidad <= limite_superior:
             # Calcular la posición relativa
-                    posicion_relativa = (intensidad - limite_inferior) / (limite_superior - limite_inferior)
+                posicion_relativa = (intensidad - limite_inferior) / (limite_superior - limite_inferior)
             
             # Calcular el radio correspondiente dentro del rango
-                    radio = limite_inferior + (posicion_relativa * (limite_superior - limite_inferior))
+                radio = limite_inferior + (posicion_relativa * (limite_superior - limite_inferior))
             
             # Agregar el punto al gráfico
-                    if t<=limite:
+                if t<=limite:
 
-                        fig.add_trace(go.Scatterpolar(
-                            r=[radio],
-                            theta=[angulo_viento],
-                            mode='markers',
-                            marker=dict(symbol='circle', color="green", size=4),
-                            showlegend=False
-                        ))
-                        break 
-                    else:
-                        fig.add_trace(go.Scatterpolar(
-                            r=[radio],
-                            theta=[angulo_viento],
-                            mode='markers',
-                            marker=dict(symbol='circle', color="red", size=4),
-                            showlegend=False
-                        ))
-                        break 
+                    fig.add_trace(go.Scatterpolar(
+                        r=[radio],
+                        theta=[angulo_viento],
+                        mode='markers',
+                        marker=dict(symbol='circle', color="green", size=4),
+                        showlegend=False
+                    ))
+                    break 
+                else:
+                    fig.add_trace(go.Scatterpolar(
+                        r=[radio],
+                        theta=[angulo_viento],
+                        mode='markers',
+                        marker=dict(symbol='circle', color="red", size=4),
+                        showlegend=False
+                    ))
+                    break 
 
 
         # Configuración del gráfico polar
@@ -562,7 +558,7 @@ class ProcesadorDeDatos:
 
 uploaded_file = st.file_uploader("", type=["xlsx", "csv"], key="file_uploader_1")
 dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
-limites = st.sidebar.number_input("Ingrese limites en (knots)", min_value=10, max_value=40, value=10, key="limites")
+limites = st.sidebar.number_input("Ingrese el límite de Componente Transversal (kt)", min_value=10, max_value=40, value=10, key="limites")
 
 if "tabla_original" not in st.session_state:
     st.session_state["tabla_original"] = None
@@ -601,7 +597,7 @@ if uploaded_file is not None:
             
             cohe=resultados.coheficiente(limites,pa_el_box)
             if cohe is not None:
-                st.markdown(f"**Coeficiente de utilización:** {cohe}%")
+                st.markdown(f"**Coeficiente de utilización:** {cohe}% - **Dirección de Pista**: {dir_pista}º")
        
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
@@ -611,52 +607,38 @@ if uploaded_file is not None:
             #st.dataframe(df_graf_otro)
                               
 
-    if page=="Pruebas individuales": 
-        with results_container:          
-    
+    if page == "Pruebas individuales":
+        with results_container:
             st.subheader("Pruebas individuales")
-            col1, col2 = st.columns(2)
+            st.expander("Tabla Original").dataframe(tabla_original)
+  
+            
+            tabla_original["Direccion"] = pd.to_numeric(tabla_original["Direccion"], errors="coerce")
+            tabla_original["Intensidad (kt)"] = pd.to_numeric(tabla_original["Intensidad (kt)"], errors="coerce")
+            num_filas=len(tabla_original)
+            fila = st.number_input("Indique el índice de la fila", min_value=0, max_value=num_filas - 1, value=0, key="fila")
+            try:
+                dir=tabla_original.iloc[fila,0]
+                nudo=tabla_original.iloc[fila,1]
+                diferencia=dir - dir_pista
+                dif_rad= np.radians(diferencia)  # Resta del índice al valor
+                seno = np.sin(dif_rad) 
+                seno=np.abs(seno) 
+                y=seno*nudo
+                y=y.round(2)
+                st.write(f"Dirección: {dir}º")
+                st.write(f"Intensidad (kt): {nudo}")
+                st.write(f"Intensidad del Componente Transversal: {y} kt - Dirección de Pista: {dir_pista}º")
+                if y <= limites:
+                    st.write("Coheficiente: 100%")
+                else:
+                    st.write("Coheficiente: 0")
+                st.expander("Gráfico")
+                resultados.grafico1(nudo,dir,dir_pista,limites,y)
+            except IndexError:
+                st.error("El índice seleccionado está fuera de rango.")
 
-            with col1:
-                tabla_original["Direccion"] = pd.to_numeric(tabla_original["Direccion"], errors='coerce')
-                tabla_original["Intensidad (kt)"] = pd.to_numeric(tabla_original["Intensidad (kt)"], errors='coerce')
-
-                grid_options = GridOptionsBuilder.from_dataframe(tabla_original)
-                grid_options.configure_selection('single')  # Permite seleccionar una fila
-
-# Renderizamos la tabla con Ag-Grid
-                grid_response = AgGrid(tabla_original, gridOptions=grid_options.build())
-
-# Extraemos el índice de la fila seleccionada
-                fila_seleccionada_aggrid = grid_response['selected_rows']
-
-                #st.expander("Tabla Original").dataframe(grid_response)
-                if fila_seleccionada_aggrid is not None and len(fila_seleccionada_aggrid) > 0:
-                    
-                    #fila_seleccionada = fila_seleccionada_aggrid[0]
-                    direccion = fila_seleccionada_aggrid['Direccion'].values[0]
-                    intensidad_kt = fila_seleccionada_aggrid['Intensidad (kt)'].values[0]
-    
-    # Realiza el cálculo
-                    diferencia = direccion - dir_pista
-                    dif_rad = np.radians(diferencia)
-                    seno = np.sin(dif_rad)
-                    seno = np.abs(seno)
-                    y = seno * intensidad_kt  # Aquí 'y' será un número único
-                    with col2:
-                        st.write(fila_seleccionada_aggrid)
-                        
-    
-                        st.write(f"Componente Transversal (kt): {y.round(3)}")
-    
-    # Comparación con 'limites'
-                        if y <= limites:
-                            st.write("Coeficiente de utilización: 100%")
-                        else:
-                            st.write("Coeficiente de utilización: 0")
-                    with st.expander("GRAFICO_1"):
-                        resultados.grafico1(fila_seleccionada_aggrid,dir_pista,limites,y)
-    
+ 
     if page=="Otros Gráficos":
         df_graf,df_graf_otro=resultados.tabla_grafico(copia)
 
