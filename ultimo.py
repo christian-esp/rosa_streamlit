@@ -6,7 +6,8 @@ import base64
 import matplotlib.pyplot as plt
 from io import BytesIO
 from matplotlib.lines import Line2D 
-from st_aggrid import AgGrid, GridOptionsBuilder
+from fpdf import FPDF
+
 
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
@@ -294,6 +295,10 @@ class ProcesadorDeDatos:
                         rotacion +=120
                     elif 200 <= angulo_grados < 210:
                         rotacion +=220
+                    elif 200 <= angulo_grados < 210:
+                        rotacion += 220  
+                    elif 210 <= angulo_grados < 220:
+                        rotacion += 230
                     elif 340 <= angulo_grados < 350:
                         rotacion +=300
                     elif 70 <= angulo_grados < 80:
@@ -325,6 +330,21 @@ class ProcesadorDeDatos:
                         fontweight='bold',  # Texto en negrita
                         color='blue'
                     )
+                elif 0<valor <= 0.1 :
+                    posicion_radial = radio + 5
+                    ax.text(
+                        direcciones[j],
+                        posicion_radial,  # Desplazar el texto ligeramente afuera
+                        "+",
+                        fontsize=3.3,
+                        rotation=90,  # Mantener el texto vertical
+                        ha='center',
+                        va='center',
+                        rotation_mode='anchor' ,
+                        fontweight='bold',  # Texto en negrita
+                        color='blue'
+                    )
+
 
         # Agregar línea para la dirección de la pista
         angulo_pista_rad = np.radians(dir_pista)
@@ -363,9 +383,86 @@ class ProcesadorDeDatos:
         plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
+        
+        # Mostrar el gráfico en Streamlit
+        st.image(buf)
+        st.download_button(
+        label="Descargar Gráfico",
+        data=buf,
+        file_name="grafico_principal.png",
+        mime="image/png"
+    )
+
+    def grafico_principal1(self, dir_pista, limite, df_graf1):
+    # Crear la figura y el eje polar
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(3, 3))
+
+        # Direcciones en radianes
+        direcciones = np.radians(df_graf1.index)  # Convertir grados a radianes
+
+        # Definir un rango de colores para los círculos
+        color_map = plt.cm.viridis  # O cualquier otro colormap que prefieras
+        max_frecuencia = df_graf1.max().max()  # Máxima frecuencia de viento
+        max_intensidad = df_graf1.max(axis=0).max()  # Máxima intensidad de viento
+
+        for i in range(0, df_graf1.shape[1]):  # Para cada columna (que representa una dirección específica)
+            valores = df_graf1.iloc[:, i]
+            
+            # Iterar sobre cada valor de la columna
+            for j, valor in enumerate(valores):
+                if valor > 0:
+                    # Definir el tamaño de los círculos basado en la intensidad del viento
+                    radio = (i) * 10  # Ajusta esto si es necesario
+                    tamaño_circulo = valor / max_frecuencia * 50  # Ajuste del tamaño de los círculos
+                    color = color_map(valor / max_frecuencia)  # Asignar color según la frecuencia
+
+                    # Modificar estilo de los círculos, zorder=3 asegura que los círculos están sobre los rayos
+                    ax.scatter(
+                        direcciones[j], 
+                        radio + 5, 
+                        s=tamaño_circulo,  # Tamaño ajustado
+                        color=color,       # Color basado en la frecuencia
+                        alpha=0.9,         # Transparencia
+                         # Borde de los círculos en negro
+                        linewidths=0.01,    # Grosor del borde
+                        marker='o',        # Forma circular
+                        zorder=3           # Coloca los círculos encima de los rayos
+                    )
+
+        # Agregar línea para la dirección de la pista
+        angulo_pista_rad = np.radians(dir_pista)
+        angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)  # Dirección opuesta (180 grados)
+        grosor = 3.5 * (limite - 10) + 35
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [40, 50], color='green', lw=grosor, alpha=0.3, zorder=1)  # zorder=1 para los rayos
+        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [50, 50], linestyle='--', color='green', lw=1, alpha=0.7, zorder=1)
+
+        # Configurar ejes
+        ax.set_theta_zero_location("N")  # Norte en la parte superior
+        ax.set_theta_direction(-1)  # Dirección en sentido horario
+        ax.set_xticks(np.radians(range(0, 360, 10)))
+        ax.set_yticks(range(10, 51, 10))
+        ax.set_ylim(0, 50)
+
+        labels = ['360' if i == 0 else str(i) for i in range(0, 360, 10)] 
+        ax.set_xticklabels(labels)
+        ax.tick_params(axis='y', colors='black', labelsize=3)
+        ax.tick_params(axis='x', labelsize=5)
+        ax.grid(True)
+
+        # Títulos y leyenda
+        ax.set_title("Distribución de Vientos", va='bottom', fontsize=7)
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
+
+        buf = BytesIO()
+        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        buf.seek(0)
+        plt.close(fig)  # Cerrar la figura para liberar memoria
 
         # Mostrar el gráfico en Streamlit
         st.image(buf)
+
+
+
 
     def plot_bar(self,tabla): 
         fig, ax = plt.subplots() 
@@ -446,7 +543,7 @@ class ProcesadorDeDatos:
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
 
-    def grafico1(self,intensidad,angulo_viento,pista,limite,t):
+    def grafico1(self,intensidad,angulo_viento,pista,limite,t,buf):
         fig = go.Figure()
        
         angulo_pista = pista  # Dirección ingresada por el usuario
@@ -552,7 +649,31 @@ class ProcesadorDeDatos:
             'staticPlot': True        # Convierte el gráfico en estático
         }
         # Mostrar el gráfico en Streamlit
+        fig.write_image(buf, format='png')
+        buf.seek(0)
         st.plotly_chart(fig, config=config)
+
+
+##########################################################MINFORME##################################################
+
+    def generar_pdf(self,y,dir_pista, limite,grafico_scatter_buf):
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Arial", size=12)
+        
+        # Título
+        pdf.cell(200, 10, txt="INFORME", ln=True, align='C')
+        pdf.ln(10)  # Espaciado
+        texto = f"COHEFICIENTE DE UTILIZACIÓN: {y} %\nDirección de Pista: {dir_pista}º \nLímite del Componente Transversal permitido: {limite}"
+        pdf.multi_cell(0, 10, texto) 
+        pdf.ln(10)  # Espaciado
+        if grafico_scatter_buf and not grafico_scatter_buf.getvalue() == b'':
+            grafico_scatter_buf.seek(0)  # Asegúrate de que el puntero esté al inicio
+            pdf.image(grafico_scatter_buf, x=10, y=None, w=190, type='PNG')
+        else:
+            pdf.cell(0, 10, txt="No se pudo generar el gráfico.", ln=True, align='C')
+        pdf_bytes = pdf.output(dest='S').encode('latin1')  # Devuelve los bytes del PDF
+        return BytesIO(pdf_bytes) 
 
 #####################################MOSTRAR RESULTADOS EN LA APP####################################
 
@@ -581,6 +702,7 @@ with header_container:
 if uploaded_file is not None:
     tabla_original=resultados.cargar_archivo(uploaded_file)
     copia=tabla_original.copy()
+    
     if page=="Ver Resultados":
         with results_container:
             st.subheader("Resultados")
@@ -593,16 +715,29 @@ if uploaded_file is not None:
                 #pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
                 pa_el_box, comp_transv_styled = resultados.nu_tabla_deca(dir_pista,copia)
 
-                st.expander("Tabla Procesada").dataframe(comp_transv_styled)
+                st.expander("Intensidad Componente Transversal").dataframe(comp_transv_styled)
             
             cohe=resultados.coheficiente(limites,pa_el_box)
             if cohe is not None:
-                st.markdown(f"**Coeficiente de utilización:** {cohe}% - **Dirección de Pista**: {dir_pista}º")
+                if cohe >= 95:
+                    st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista}º</span>- Límite Componente Transversal: <span style="color:green;">{limites} kt</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista}º</span> - Límite Componente Transversal: <span style="color:red;">{limites} kt</span>
+                        </p>
+                        """, unsafe_allow_html=True)
        
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
-            with st.expander("GRAFICO"):
+            with st.expander("GRAFICO", expanded=True):
                 resultados.grafico_principal(dir_pista,limites,df_graf)
+            with st.expander("GRAFICO B"):
+                resultados.grafico_principal1(dir_pista, limites, df_graf_otro)
             #st.dataframe(df_graf)
             #st.dataframe(df_graf_otro)
                               
@@ -612,7 +747,6 @@ if uploaded_file is not None:
             st.subheader("Pruebas individuales")
             st.expander("Tabla Original").dataframe(tabla_original)
   
-            
             tabla_original["Direccion"] = pd.to_numeric(tabla_original["Direccion"], errors="coerce")
             tabla_original["Intensidad (kt)"] = pd.to_numeric(tabla_original["Intensidad (kt)"], errors="coerce")
             num_filas=len(tabla_original)
@@ -634,7 +768,19 @@ if uploaded_file is not None:
                 else:
                     st.write("Coheficiente: 0")
                 st.expander("Gráfico")
-                resultados.grafico1(nudo,dir,dir_pista,limites,y)
+                buf = BytesIO()
+                resultados.grafico1(nudo,dir,dir_pista,limites,y,buf)
+                buf.seek(0)  # Volver al inicio del buffer
+                #st.image(buf, caption="Gráfico generado", use_column_width=True)
+
+            # Crear botón para descargar la imagen
+                st.download_button(
+                    label="Descargar gráfico",
+                    data=buf,
+                    file_name="grafico_generado.png",
+                    mime="image/png"
+                )
+
             except IndexError:
                 st.error("El índice seleccionado está fuera de rango.")
 
@@ -644,14 +790,11 @@ if uploaded_file is not None:
 
         with otros_graficos:
             st.subheader("Gráficos")
-            with st.expander("Gráfico Polar"):
-                resultados.plot_polar(df_graf)
+            #with st.expander("Gráfico Polar"):
+                #resultados.plot_polar(df_graf)
             with st.expander("Gráfico de Barras"):
                 resultados.plot_bar(df_graf_otro)
             with st.expander("Gráfico de Líneas"):
                 resultados.plot_line(df_graf_otro)
             with st.expander("Gráfico de Dispersión"):
                 resultados.plot_scatter(df_graf_otro)
-
-
-                
