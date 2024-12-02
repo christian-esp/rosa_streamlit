@@ -7,8 +7,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from matplotlib.lines import Line2D 
 from fpdf import FPDF
-
-
+import io
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
@@ -189,7 +188,7 @@ class ProcesadorDeDatos:
             raise ArchivoInvalidoError("\n".join(errores))
         
     
-    def nu_tabla_deca(self, pista,data_base):
+    def nu_tabla_deca(self, pista,data_base,limites):
         if data_base is None:
             st.error("Debe cargar un archivo primero.")
             return
@@ -201,19 +200,36 @@ class ProcesadorDeDatos:
         dif_rad= np.radians(diferencia)  # Resta del índice al valor
         seno = np.sin(dif_rad) 
         seno=np.abs(seno) 
+        data_base["Intensidad (km/h)"]=(data_base["Intensidad (kt)"]*1.852).round(2)
+        data_base["Intensidad (km/h)"]=pd.to_numeric(data_base["Intensidad (km/h)"], errors='coerce')
         data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
         y=seno*data_base["Intensidad (kt)"]
+        yy=seno*data_base["Intensidad (km/h)"]
         y.name = "Componente Transversal (kt)"
+        yy.name="Componente Transversal (km/h)"
         y=y.to_frame()
-        def highlight_values(val):
+        yy=yy.to_frame()
+        
+
+        def highlight_values_nudos(val):
             if val > limites:
                 return "background-color: red; color: white;"
             else:
                 return "background-color: green; color: white;"
+        def highlight_values_km(val):
+            limites_km=round(limites*1.852,2)
 
-        styled_y = y.style.map(highlight_values, subset=["Componente Transversal (kt)"])
 
-        return y, styled_y
+            if val > limites_km:
+                return "background-color: red; color: white;"
+            else:
+                return "background-color: green; color: white;"
+
+        styled_y = y.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
+        styled_yy = yy.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
+
+
+        return y,yy, styled_y,styled_yy
 
     def redondear_personalizado(self, numeros):
         parte_decimal = numeros - np.floor(numeros)
@@ -256,6 +272,25 @@ class ProcesadorDeDatos:
         tabla_para_grafico_1 = (tabla_para_grafico / total_datos_orgin) * 100
 
         return tabla_para_grafico_1.round(2), tabla_para_grafico
+
+    
+    def archivo_prueba(self):
+        # Generar direcciones aleatorias entre 10 y 360, repitiendo algunas direcciones
+        directions = np.random.choice(range(10, 361), size=100, replace=True)
+
+# Generar intensidades aleatorias entre 0.1 y 50
+        intensity = np.random.uniform(0.1, 50, size=100)
+
+# Crear el DataFrame
+        df = pd.DataFrame({
+            'Direccion': directions,
+            'Intensidad_Viento': intensity
+        })
+        df["Intensidad_Viento"]=df["Intensidad_Viento"].round(2)
+        output = io.BytesIO()  # Crear un buffer en memoria
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Datos_Viento')
+        return output.getvalue()
     
     ###################################### GRAFICOS ######################################
 
@@ -295,10 +330,10 @@ class ProcesadorDeDatos:
                         rotacion +=120
                     elif 200 <= angulo_grados < 210:
                         rotacion +=220
-                    elif 200 <= angulo_grados < 210:
-                        rotacion += 220  
+                    elif 220 <= angulo_grados < 230:
+                        rotacion += 198  
                     elif 210 <= angulo_grados < 220:
-                        rotacion += 230
+                        rotacion += 199
                     elif 340 <= angulo_grados < 350:
                         rotacion +=300
                     elif 70 <= angulo_grados < 80:
@@ -317,6 +352,32 @@ class ProcesadorDeDatos:
                         rotacion +=300
                     elif 10 <= angulo_grados < 20:
                         rotacion +=70
+                    elif 20 <= angulo_grados < 30:
+                        rotacion +=72
+                    elif 300 <= angulo_grados < 310:
+                        rotacion +=35
+                    elif 280 <= angulo_grados < 290:
+                        rotacion +=65
+                    elif 260 <= angulo_grados < 270:
+                        rotacion +=105
+                    elif 330 <= angulo_grados < 340:
+                        rotacion +=335
+                    elif 80 <= angulo_grados < 90:
+                        rotacion +=300
+                    elif 130 <= angulo_grados < 140:
+                        rotacion +=180
+                    elif 150 <= angulo_grados < 160:
+                        rotacion +=150
+                    elif 170 <= angulo_grados < 180:
+                        rotacion +=105
+                    elif 190 <= angulo_grados < 200:
+                        rotacion +=250
+                    elif 100 <= angulo_grados < 110:
+                        rotacion +=250
+                    elif 240 <= angulo_grados < 250:
+                        rotacion +=250
+                    elif 60 <= angulo_grados < 70:
+                        rotacion +=1
                 
                     ax.text(
                         direcciones[j],
@@ -460,9 +521,6 @@ class ProcesadorDeDatos:
 
         # Mostrar el gráfico en Streamlit
         st.image(buf)
-
-
-
 
     def plot_bar(self,tabla): 
         fig, ax = plt.subplots() 
@@ -676,10 +734,24 @@ class ProcesadorDeDatos:
         return BytesIO(pdf_bytes) 
 
 #####################################MOSTRAR RESULTADOS EN LA APP####################################
-
+resultados = ProcesadorDeDatos()
 uploaded_file = st.file_uploader("", type=["xlsx", "csv"], key="file_uploader_1")
 dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
 limites = st.sidebar.number_input("Ingrese el límite de Componente Transversal (kt)", min_value=10, max_value=40, value=10, key="limites")
+limites_kmh = round(limites * 1.852)
+# Mostrar el valor convertido junto al control
+st.sidebar.markdown(f"**Límite equivalente:** {limites_kmh} km/h")
+st.sidebar.write("Archivo de prueba")
+
+# Botón para descargar el archivo Excel en el sidebar
+
+excel_data = resultados.archivo_prueba()
+st.sidebar.download_button(
+        label="Descargar formato",
+        data=excel_data,
+        file_name="archivo_prueba.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 if "tabla_original" not in st.session_state:
     st.session_state["tabla_original"] = None
@@ -689,7 +761,7 @@ if "fila_seleccionada" not in st.session_state:
     st.session_state["fila_seleccionada"] = None
 
 #SI APRETO EL BOTON DE CARGA DE ARCHIVO:
-resultados = ProcesadorDeDatos()
+#resultados = ProcesadorDeDatos()
 header_container = st.container()
 # Contenedor para los resultados
 results_container = st.container()
@@ -701,6 +773,7 @@ with header_container:
 
 if uploaded_file is not None:
     tabla_original=resultados.cargar_archivo(uploaded_file)
+    tabla_original["Intensidad (km/h)"]=(tabla_original["Intensidad (kt)"]*1.852).round(2)
     copia=tabla_original.copy()
     
     if page=="Ver Resultados":
@@ -712,23 +785,34 @@ if uploaded_file is not None:
                 st.expander("Tabla Original").dataframe(tabla_original)
 
             with col2:
-                #pa_el_box=resultados.nu_tabla_deca(dir_pista,copia)
-                pa_el_box, comp_transv_styled = resultados.nu_tabla_deca(dir_pista,copia)
+                
+                pa_el_box, pa_el_box1,comp_transv_styled,comp_transv_styled1 = resultados.nu_tabla_deca(dir_pista,copia,limites)
 
-                st.expander("Intensidad Componente Transversal").dataframe(comp_transv_styled)
+                with st.expander("Intensidad Componente Transversal"):
+                    col_left, col_right = st.columns(2)
+                    
+                    with col_left:
+                        
+                        st.dataframe(comp_transv_styled)
+
+                    with col_right:
+                        
+                        st.dataframe(comp_transv_styled1)
             
             cohe=resultados.coheficiente(limites,pa_el_box)
             if cohe is not None:
+                limites_km=round(limites*1.852)
+
                 if cohe >= 95:
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista}º</span>- Límite Componente Transversal: <span style="color:green;">{limites} kt</span>
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista}º</span>- Límite Componente Transversal: <span style="color:green;">{limites} kt</span> / <span style="color:green;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
                 else:
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista}º</span> - Límite Componente Transversal: <span style="color:red;">{limites} kt</span>
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista}º</span> - Límite Componente Transversal: <span style="color:red;">{limites} kt</span> / <span style="color:red;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
        
@@ -754,15 +838,21 @@ if uploaded_file is not None:
             try:
                 dir=tabla_original.iloc[fila,0]
                 nudo=tabla_original.iloc[fila,1]
+                km=tabla_original.iloc[fila,2]
                 diferencia=dir - dir_pista
                 dif_rad= np.radians(diferencia)  # Resta del índice al valor
                 seno = np.sin(dif_rad) 
                 seno=np.abs(seno) 
                 y=seno*nudo
+                yy=seno*km
                 y=y.round(2)
-                st.write(f"Dirección: {dir}º")
-                st.write(f"Intensidad (kt): {nudo}")
-                st.write(f"Intensidad del Componente Transversal: {y} kt - Dirección de Pista: {dir_pista}º")
+                yy=yy.round(2)
+               
+                st.write(f"Dirección del viento: {dir}º")
+                st.write(f"Intensidad del viento: {nudo} kt - {km} km/h")
+                st.write(f"Dirección de Pista: {dir_pista}º")
+                st.write(f"Intensidad del Componente Transversal: {y} kt - {yy} km/h")
+                
                 if y <= limites:
                     st.write("Coheficiente: 100%")
                 else:
