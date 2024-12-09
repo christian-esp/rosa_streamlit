@@ -153,8 +153,10 @@ class ProcesadorDeDatos:
         
         except ArchivoInvalidoError as e:
             st.error(f"Error en los Datos: {str(e)}")
+            st.stop()
         except Exception as e:
-            st.error(f"No se pudo leer el archivo: {str(e)}")
+            #st.error(f"No se pudo leer el archivo: {str(e)}")
+            st.stop()
 
     def read_file(self, archivo):
         """Lee el archivo y devuelve un DataFrame."""
@@ -185,7 +187,10 @@ class ProcesadorDeDatos:
             errores.append("La columna de Nudos contiene valores nulos.")
 
         if errores:
-            raise ArchivoInvalidoError("\n".join(errores))
+            st.error("Error en los Datos: " + "\n".join(errores))
+
+        # Mostrar un segundo mensaje con la sugerencia de descargar el formato de prueba
+            st.info("Por favor, descargue el formato de prueba y asegúrese de que sus datos cumplan con los requisitos.")
         
     
     def nu_tabla_deca(self, pista,data_base,limites):
@@ -203,12 +208,12 @@ class ProcesadorDeDatos:
         data_base["Intensidad (km/h)"]=(data_base["Intensidad (kt)"]*1.852).round(2)
         data_base["Intensidad (km/h)"]=pd.to_numeric(data_base["Intensidad (km/h)"], errors='coerce')
         data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
-        y=seno*data_base["Intensidad (kt)"]
-        yy=seno*data_base["Intensidad (km/h)"]
-        y.name = "Componente Transversal (kt)"
-        yy.name="Componente Transversal (km/h)"
-        y=y.to_frame()
-        yy=yy.to_frame()
+        intensidad_nudos=seno*data_base["Intensidad (kt)"]
+        intensidad_km=seno*data_base["Intensidad (km/h)"]
+        intensidad_nudos.name = "Componente Transversal (kt)"
+        intensidad_km.name="Componente Transversal (km/h)"
+        intensidad_nudos=intensidad_nudos.to_frame()
+        intensidad_km=intensidad_km.to_frame()
         
 
         def highlight_values_nudos(val):
@@ -225,11 +230,11 @@ class ProcesadorDeDatos:
             else:
                 return "background-color: green; color: white;"
 
-        styled_y = y.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
-        styled_yy = yy.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
+        intensidad_nudos_rojo_verde = intensidad_nudos.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
+        intensidad_km_rojo_verde = intensidad_km.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
 
 
-        return y,yy, styled_y,styled_yy
+        return intensidad_nudos,intensidad_km, intensidad_nudos_rojo_verde,intensidad_km_rojo_verde
 
     def redondear_personalizado(self, numeros):
         parte_decimal = numeros - np.floor(numeros)
@@ -326,6 +331,7 @@ class ProcesadorDeDatos:
                         rotacion +=50
                     elif 230 <= angulo_grados < 240:
                         rotacion +=180
+                 
                     elif 250 <= angulo_grados < 260:
                         rotacion +=120
                     elif 200 <= angulo_grados < 210:
@@ -374,10 +380,11 @@ class ProcesadorDeDatos:
                         rotacion +=250
                     elif 100 <= angulo_grados < 110:
                         rotacion +=250
+                    
                     elif 240 <= angulo_grados < 250:
-                        rotacion +=250
+                        rotacion +=800
                     elif 60 <= angulo_grados < 70:
-                        rotacion +=1
+                        rotacion +=90
                 
                     ax.text(
                         direcciones[j],
@@ -533,6 +540,12 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
+        st.download_button(
+        label="Descargar Gráfico",
+        data=buf,
+        file_name="plot_bar.png",
+        mime="image/png"
+    )
 
     def plot_line(self,tabla): 
         fig, ax = plt.subplots() 
@@ -545,6 +558,12 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
+        st.download_button(
+        label="Descargar Gráfico",
+        data=buf,
+        file_name="plot_line.png",
+        mime="image/png"
+    )
 
     def plot_scatter(self,tabla): 
         fig, ax = plt.subplots() 
@@ -554,7 +573,7 @@ class ProcesadorDeDatos:
         ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
         ax.set_xlabel('Dirección (grados)') 
         ax.set_ylabel('Frecuencia') 
-        ax.legend(title='Intervalos de Nudos', fontsize=5,title_fontsize=7) 
+        ax.legend(title='Intervalos de Nudos', fontsize=5,title_fontsize=5) 
         ax.set_xticks(tabla.index)
         ax.tick_params(axis='x', rotation=90)
 
@@ -563,6 +582,12 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
+        st.download_button(
+        label="Descargar Gráfico",
+        data=buf,
+        file_name="plot_scatter.png",
+        mime="image/png"
+    )
 
     def plot_polar(self,tabla): 
         angles = np.deg2rad(tabla.index.values)
