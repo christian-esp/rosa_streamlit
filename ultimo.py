@@ -8,6 +8,9 @@ from io import BytesIO
 from matplotlib.lines import Line2D 
 from fpdf import FPDF
 import io
+from matplotlib.patches import Polygon
+from matplotlib.projections import PolarAxes
+from matplotlib.transforms import Affine2D
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
@@ -153,10 +156,8 @@ class ProcesadorDeDatos:
         
         except ArchivoInvalidoError as e:
             st.error(f"Error en los Datos: {str(e)}")
-            st.stop()
         except Exception as e:
-            #st.error(f"No se pudo leer el archivo: {str(e)}")
-            st.stop()
+            st.error(f"No se pudo leer el archivo: {str(e)}")
 
     def read_file(self, archivo):
         """Lee el archivo y devuelve un DataFrame."""
@@ -187,11 +188,7 @@ class ProcesadorDeDatos:
             errores.append("La columna de Nudos contiene valores nulos.")
 
         if errores:
-            st.error("Error en los Datos: " + "\n".join(errores))
-
-        # Mostrar un segundo mensaje con la sugerencia de descargar el formato de prueba
-            st.info("Por favor, descargue el formato de prueba y asegúrese de que sus datos cumplan con los requisitos.")
-        
+            raise ArchivoInvalidoError("\n".join(errores))      
     
     def nu_tabla_deca(self, pista,data_base,limites):
         if data_base is None:
@@ -208,12 +205,12 @@ class ProcesadorDeDatos:
         data_base["Intensidad (km/h)"]=(data_base["Intensidad (kt)"]*1.852).round(2)
         data_base["Intensidad (km/h)"]=pd.to_numeric(data_base["Intensidad (km/h)"], errors='coerce')
         data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
-        intensidad_nudos=seno*data_base["Intensidad (kt)"]
-        intensidad_km=seno*data_base["Intensidad (km/h)"]
-        intensidad_nudos.name = "Componente Transversal (kt)"
-        intensidad_km.name="Componente Transversal (km/h)"
-        intensidad_nudos=intensidad_nudos.to_frame()
-        intensidad_km=intensidad_km.to_frame()
+        y=seno*data_base["Intensidad (kt)"]
+        yy=seno*data_base["Intensidad (km/h)"]
+        y.name = "Componente Transversal (kt)"
+        yy.name="Componente Transversal (km/h)"
+        y=y.to_frame()
+        yy=yy.to_frame()
         
 
         def highlight_values_nudos(val):
@@ -230,11 +227,11 @@ class ProcesadorDeDatos:
             else:
                 return "background-color: green; color: white;"
 
-        intensidad_nudos_rojo_verde = intensidad_nudos.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
-        intensidad_km_rojo_verde = intensidad_km.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
+        styled_y = y.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
+        styled_yy = yy.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
 
 
-        return intensidad_nudos,intensidad_km, intensidad_nudos_rojo_verde,intensidad_km_rojo_verde
+        return y,yy, styled_y,styled_yy
 
     def redondear_personalizado(self, numeros):
         parte_decimal = numeros - np.floor(numeros)
@@ -298,6 +295,109 @@ class ProcesadorDeDatos:
         return output.getvalue()
     
     ###################################### GRAFICOS ######################################
+    def grafico_principal_prueba(self,tabla_grafico,dir_pista,limite):
+        frecuencias = [10, 20, 30, 40,50]
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(4, 4))
+        ax.set_theta_zero_location("N")  # 0° en la parte superior (Norte)
+        ax.set_theta_direction(-1)       # Sentido horario
+        ax.set_title("Rosa de Vientos", y=1.05, fontsize=10)
+
+# Etiquetas angulares centradas en los sectores
+        angulos = np.arange(0, 360, 10) 
+        ax.set_xticks(np.deg2rad(angulos + 5))  # Ajustar +5 grados para centrar etiquetas entre los rayos
+        ax.set_xticklabels([" "]*len(angulos), fontsize=10)
+        ax.set_rgrids(range(10, max(frecuencias) + 10, 10), angle=90, fontsize=5)
+
+        suma_primera_columna = tabla_grafico.iloc[:, 0].sum() 
+        suma_redondeada = round(suma_primera_columna,2)
+        ax.text(0, 0, f"{suma_redondeada}", fontsize=7, ha='center', va='center', color='blue')
+
+        manual_labels = [
+            (0, "360°"), (10, "10°"), (20, "20°"), (30, "30°"), (40, "40°"), 
+            (50, "50°"), (60, "60°"), (70, "70°"), (80, "80°"), (90, "90°"), 
+            (100, "100°"), (110, "110°"), (120, "120°"), (130, "130°"), (140, "140°"),
+            (150, "150°"), (160, "160°"), (170, "170°"), (180, "180°"), (190, "190°"), 
+            (200, "200°"), (210, "210°"), (220, "220°"), (230, "230°"), (240, "240°"),
+            (250, "250°"), (260, "260°"), (270, "270°"), (280, "280°"), (290, "290°"),
+            (300, "300°"), (310, "310°"), (320, "320°"), (330, "330°"), (340, "340°"),
+            (350, "350°")
+        ]
+
+        desplazamiento=0.2
+        direcciones = np.deg2rad(tabla_grafico.index)
+        for angle_deg, label in manual_labels:
+            angle_rad = np.deg2rad(angle_deg+desplazamiento)  # Convertir a radianes
+            ax.text(
+                angle_rad, 1.1 * max(frecuencias),  # Coordenadas (ángulo, radio)
+                label, fontsize=4, ha='center', va='center',fontweight='bold', color='blue'  # Ajustes del texto
+            )
+
+        ax.set_rlim(0, max(frecuencias) + 10)
+        dir_pista_rad = np.deg2rad(dir_pista)
+        grosor = 3.5 * (limite - 10) + 37.8
+
+        angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)
+        ax.plot([dir_pista_rad, angulo_opuesto_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7)
+        ax.plot([angulo_opuesto_rad, dir_pista_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7)
+        ax.plot([dir_pista_rad, angulo_opuesto_rad], [50, 50], color='green', lw=grosor, alpha=0.3)
+
+
+
+        for i in range(1, tabla_grafico.shape[1]):
+            radio = (i) * 10
+            valores = tabla_grafico.iloc[:, i]
+            
+            # Agregar los textos
+            for j, valor in enumerate(valores):
+                if valor > 0.1:
+                    #angulo_grados = np.degrees(direcciones[j])  # Convertir de radianes a grados
+                    posicion_radial = radio + 5
+                    ax.text(
+                        direcciones[j],
+                        posicion_radial,  # Desplazar el texto ligeramente afuera
+                        f"{valor:.2f}",
+                        fontsize=3,
+                  # Mantener el texto vertical
+                        ha='center',
+                        va='center',
+                        rotation_mode='anchor' ,
+                        fontweight='bold',  # Texto en negrita
+                        color='blue'
+                    )
+                elif 0<valor <= 0.1 :
+                    posicion_radial = radio + 5
+                    ax.text(
+                        direcciones[j],
+                        posicion_radial,  # Desplazar el texto ligeramente afuera
+                        "+",
+                        fontsize=3.3,
+                        ha='center',
+                        va='center',
+                        rotation_mode='anchor' ,
+                        fontweight='bold',  # Texto en negrita
+                        color='blue'
+                    )
+        plt.tight_layout()
+        fig = plt.gcf()  # Obtener la figura actual
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=300)
+        buf.seek(0)
+
+        # Añadir botón de descarga en Streamlit
+        
+        st.download_button(
+                label="Descargar Gráfico como PNG",
+                data=buf,
+                file_name="grafico_polar.png",
+                mime="image/png"
+            )
+
+        return fig
+
+    def anemograma(self, tabla_grafico):
+        pass
+        
+    
 
     def grafico_principal(self,dir_pista,limite,df_graf1):
     # Crear la figura y el eje polar
@@ -331,7 +431,6 @@ class ProcesadorDeDatos:
                         rotacion +=50
                     elif 230 <= angulo_grados < 240:
                         rotacion +=180
-                 
                     elif 250 <= angulo_grados < 260:
                         rotacion +=120
                     elif 200 <= angulo_grados < 210:
@@ -380,11 +479,10 @@ class ProcesadorDeDatos:
                         rotacion +=250
                     elif 100 <= angulo_grados < 110:
                         rotacion +=250
-                    
                     elif 240 <= angulo_grados < 250:
-                        rotacion +=800
+                        rotacion +=250
                     elif 60 <= angulo_grados < 70:
-                        rotacion +=90
+                        rotacion +=1
                 
                     ax.text(
                         direcciones[j],
@@ -540,12 +638,6 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
-        st.download_button(
-        label="Descargar Gráfico",
-        data=buf,
-        file_name="plot_bar.png",
-        mime="image/png"
-    )
 
     def plot_line(self,tabla): 
         fig, ax = plt.subplots() 
@@ -558,12 +650,6 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
-        st.download_button(
-        label="Descargar Gráfico",
-        data=buf,
-        file_name="plot_line.png",
-        mime="image/png"
-    )
 
     def plot_scatter(self,tabla): 
         fig, ax = plt.subplots() 
@@ -573,7 +659,7 @@ class ProcesadorDeDatos:
         ax.set_title('Frecuencia de Vientos por Intervalos de Nudos') 
         ax.set_xlabel('Dirección (grados)') 
         ax.set_ylabel('Frecuencia') 
-        ax.legend(title='Intervalos de Nudos', fontsize=5,title_fontsize=5) 
+        ax.legend(title='Intervalos de Nudos', fontsize=5,title_fontsize=7) 
         ax.set_xticks(tabla.index)
         ax.tick_params(axis='x', rotation=90)
 
@@ -582,12 +668,6 @@ class ProcesadorDeDatos:
         buf.seek(0)
         plt.close(fig)  # Cerrar la figura para liberar memoria
         st.image(buf)
-        st.download_button(
-        label="Descargar Gráfico",
-        data=buf,
-        file_name="plot_scatter.png",
-        mime="image/png"
-    )
 
     def plot_polar(self,tabla): 
         angles = np.deg2rad(tabla.index.values)
@@ -844,11 +924,14 @@ if uploaded_file is not None:
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
             with st.expander("GRAFICO", expanded=True):
-                resultados.grafico_principal(dir_pista,limites,df_graf)
+                fig = resultados.grafico_principal_prueba(df_graf,dir_pista,limites)  # Ahora esto retorna la figura
+                st.pyplot(fig) 
+                
+                #resultados.grafico_principal(dir_pista,limites,df_graf)
             with st.expander("GRAFICO B"):
                 resultados.grafico_principal1(dir_pista, limites, df_graf_otro)
-            #st.dataframe(df_graf)
-            #st.dataframe(df_graf_otro)
+            st.dataframe(df_graf)
+            st.dataframe(df_graf_otro)
                               
 
     if page == "Pruebas individuales":
