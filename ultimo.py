@@ -11,12 +11,28 @@ import io
 from matplotlib.patches import Polygon
 from matplotlib.projections import PolarAxes
 from matplotlib.transforms import Affine2D
+from windrose import WindroseAxes
+import matplotlib.cm as cm
+import matplotlib.image as mpimg
+from PIL import Image
+
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
 image_path = "images/logo.png" 
- # Reemplaza con el nombre de tu imagen
-#st.sidebar.image(image_path, width=200) 
+
+st.markdown(
+    """
+    <style>
+    [data-testid="stImage"] img {
+        max-width: 100%;
+        height: auto;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 st.sidebar.markdown(
     f"""
     <style>
@@ -207,29 +223,29 @@ class ProcesadorDeDatos:
         data_base["Intensidad (kt)"] = pd.to_numeric(data_base["Intensidad (kt)"], errors='coerce')
         y=seno*data_base["Intensidad (kt)"]
         yy=seno*data_base["Intensidad (km/h)"]
-        y.name = "Componente Transversal (kt)"
-        yy.name="Componente Transversal (km/h)"
+        y.name = "Nudos"
+        yy.name="km/h"
         y=y.to_frame()
         yy=yy.to_frame()
         
 
         def highlight_values_nudos(val):
-            if val > limites:
-                return "background-color: red; color: white;"
+            if val > limite_kt:
+                return "background-color: red; color: white; text-align: left;"
             else:
-                return "background-color: green; color: white;"
+                return "background-color: green; color: white; text-align: left;"
         def highlight_values_km(val):
-            limites_km=round(limites*1.852,2)
+            limites_km=round(limite_kt*1.852,2)
 
 
             if val > limites_km:
-                return "background-color: red; color: white;"
+                return "background-color: red; color: white;text-align: left;"
             else:
-                return "background-color: green; color: white;"
+                return "background-color: green; color: white;text-align: left;"
 
-        styled_y = y.style.map(highlight_values_nudos, subset=["Componente Transversal (kt)"])
-        styled_yy = yy.style.map(highlight_values_km, subset=["Componente Transversal (km/h)"])
-
+        styled_y = y.style.map(highlight_values_nudos, subset=["Nudos"]).format("{:.2f}")
+        styled_yy = yy.style.map(highlight_values_km, subset=["km/h"]).format("{:.2f}")
+        
 
         return y,yy, styled_y,styled_yy
 
@@ -274,7 +290,6 @@ class ProcesadorDeDatos:
         tabla_para_grafico_1 = (tabla_para_grafico / total_datos_orgin) * 100
 
         return tabla_para_grafico_1.round(2), tabla_para_grafico
-
     
     def archivo_prueba(self):
         # Generar direcciones aleatorias entre 10 y 360, repitiendo algunas direcciones
@@ -296,12 +311,25 @@ class ProcesadorDeDatos:
     
     ###################################### GRAFICOS ######################################
     def grafico_principal_prueba(self,tabla_grafico,dir_pista,limite):
+        #imagen_fondo = mpimg.imread("C:/Users/cespi/Desktop/Proyecto_rosa/rosa_streamlit/logogta.png")
+
         frecuencias = [10, 20, 30, 40,50]
-        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(4, 4))
+        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(4, 4), dpi=300)
+        ax.set_facecolor('none')
+        imagen_fondo = Image.open("C:/Users/cespi/Desktop/Proyecto_rosa/rosa_streamlit/logogta.png")
+        imagen_redimensionada = imagen_fondo.resize((250, 150))  # Cambiar a tu tamaño deseado
+        imagen_redimensionada = np.array(imagen_redimensionada)
+
+# Convertir a formato compatible con Matplotlib
+        imagen_array = np.asarray(imagen_redimensionada)
+
+# Mostrar con figimage
+        fig.figimage(imagen_array, xo=260, yo=320, alpha=0.5, zorder=-1)
+
         ax.set_theta_zero_location("N")  # 0° en la parte superior (Norte)
         ax.set_theta_direction(-1)       # Sentido horario
-        ax.set_title("Rosa de Vientos", y=1.05, fontsize=10)
-
+        #ax.set_title("Rosa de Vientos", y=1.05, fontsize=10)
+        #fig.figimage(imagen_fondo, xo=0, yo=0, alpha=0.5, zorder=-1)
 # Etiquetas angulares centradas en los sectores
         angulos = np.arange(0, 360, 10) 
         ax.set_xticks(np.deg2rad(angulos + 5))  # Ajustar +5 grados para centrar etiquetas entre los rayos
@@ -310,7 +338,7 @@ class ProcesadorDeDatos:
 
         suma_primera_columna = tabla_grafico.iloc[:, 0].sum() 
         suma_redondeada = round(suma_primera_columna,2)
-        ax.text(0, 0, f"{suma_redondeada}", fontsize=7, ha='center', va='center', color='blue')
+        ax.text(0, 0, f"{suma_redondeada}", fontsize=7, ha='center', va='center', color='blue',zorder=5)
 
         manual_labels = [
             (0, "360°"), (10, "10°"), (20, "20°"), (30, "30°"), (40, "40°"), 
@@ -322,6 +350,7 @@ class ProcesadorDeDatos:
             (300, "300°"), (310, "310°"), (320, "320°"), (330, "330°"), (340, "340°"),
             (350, "350°")
         ]
+        
 
         desplazamiento=0.2
         direcciones = np.deg2rad(tabla_grafico.index)
@@ -329,19 +358,23 @@ class ProcesadorDeDatos:
             angle_rad = np.deg2rad(angle_deg+desplazamiento)  # Convertir a radianes
             ax.text(
                 angle_rad, 1.1 * max(frecuencias),  # Coordenadas (ángulo, radio)
-                label, fontsize=4, ha='center', va='center',fontweight='bold', color='blue'  # Ajustes del texto
+                label, fontsize=5, ha='center', va='center',fontweight='bold', color='#2c3e50'  # Ajustes del texto
             )
 
         ax.set_rlim(0, max(frecuencias) + 10)
         dir_pista_rad = np.deg2rad(dir_pista)
-        grosor = 3.5 * (limite - 10) + 37.8
+        grosor = 3.5 * (limite - 10) + 40.1
 
         angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)
-        ax.plot([dir_pista_rad, angulo_opuesto_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7)
-        ax.plot([angulo_opuesto_rad, dir_pista_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7)
-        ax.plot([dir_pista_rad, angulo_opuesto_rad], [50, 50], color='green', lw=grosor, alpha=0.3)
-
-
+        ax.plot([dir_pista_rad, angulo_opuesto_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7,zorder=4)
+        ax.plot([angulo_opuesto_rad, dir_pista_rad], [0, max(frecuencias)*1.9], color='black', linewidth=1,linestyle='--', alpha=0.7,zorder=4)
+        
+        if limite==10:
+            ax.plot([dir_pista_rad, angulo_opuesto_rad], [50, 50], color='green', lw=grosor, alpha=0.5)
+        elif limite==13:
+            ax.plot([dir_pista_rad, angulo_opuesto_rad], [50, 50], color='#1abc9c', lw=grosor, alpha=0.5)
+        elif limite==20:
+            ax.plot([dir_pista_rad, angulo_opuesto_rad], [50, 50], color='#2ecc71', lw=grosor, alpha=0.5)
 
         for i in range(1, tabla_grafico.shape[1]):
             radio = (i) * 10
@@ -377,16 +410,18 @@ class ProcesadorDeDatos:
                         fontweight='bold',  # Texto en negrita
                         color='blue'
                     )
+
+
         plt.tight_layout()
-        fig = plt.gcf()  # Obtener la figura actual
+        st.pyplot(fig)
         buf = io.BytesIO()
-        fig.savefig(buf, format="png", dpi=300)
+        plt.gcf().savefig(buf, format="png", dpi=300, bbox_inches='tight')
         buf.seek(0)
 
         # Añadir botón de descarga en Streamlit
         
         st.download_button(
-                label="Descargar Gráfico como PNG",
+                label="Descargar Gráfico",
                 data=buf,
                 file_name="grafico_polar.png",
                 mime="image/png"
@@ -394,170 +429,39 @@ class ProcesadorDeDatos:
 
         return fig
 
-    def anemograma(self, tabla_grafico):
-        pass
+    def anemograma(self, tabla):
+        fig = plt.figure(figsize=(4, 4), dpi=150)
+        ax = WindroseAxes.from_ax(fig=fig)
         
-    
+        # Ajustar los bins para que sean solo números sin corchetes ni paréntesis
+        bins = np.arange(0, 51, 10)
+        labels = [f"{i}-{i+10}" for i in bins[:-1]]  # Crear las etiquetas sin corchetes ni paréntesis
 
-    def grafico_principal(self,dir_pista,limite,df_graf1):
-    # Crear la figura y el eje polar
-        fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(3, 3))
+        ax.contourf(tabla["Direccion"], tabla["Intensidad (kt)"], bins=bins, cmap=cm.viridis)
 
-        # Direcciones en radianes
-        direcciones = np.radians(df_graf1.index)  # Convertir grados a radianes
+        ax.set_yticklabels([10, 20, 30, 40, 50], fontsize=8) 
+        ax.tick_params(axis='both', labelsize=8)
+
+        # Ajustar la leyenda para mostrar los nuevos labels y reducir el tamaño del texto
+        ax.set_legend(labels=labels, fontsize=6, loc='upper left', bbox_to_anchor=(1.1, 0.8), markerscale=1.5, labelspacing=0.05)
+
+        plt.tight_layout()
+        st.pyplot(fig)
         
-        # Iterar sobre las columnas del DataFrame
-        suma_primera_columna = df_graf1.iloc[:, 0].sum() 
-        suma_redondeada = round(suma_primera_columna,2)
-        ax.text(0, 0, f"{suma_redondeada}%", fontsize=5, ha='center', va='center', fontweight='bold', color='blue')
-        for i in range(1, df_graf1.shape[1]):
-            # Obtener el radio y los valores correspondientes
-            radio = (i) * 10
-            valores = df_graf1.iloc[:, i]
-            
-            # Agregar los textos
-            for j, valor in enumerate(valores):
-                if valor > 0.1:
-                    angulo_grados = np.degrees(direcciones[j])  # Convertir de radianes a grados
-                    posicion_radial = radio + 5
-                    rotacion = angulo_grados if angulo_grados <= 180 else angulo_grados - 360 
-                    if angulo_grados == 180:  # Para 0º (Norte) y 180º (Sur), texto vertical
-                        rotacion = 90
-                    elif angulo_grados == 360:  # Para 0º (Norte) y 180º (Sur), texto vertical
-                        rotacion = 270
-                    elif angulo_grados == 90 or angulo_grados == 270:  # Para 90º (Este) y 270º (Oeste), texto horizontal
-                        rotacion = 0
-                    elif 290 <= angulo_grados < 300:
-                        rotacion +=50
-                    elif 230 <= angulo_grados < 240:
-                        rotacion +=180
-                    elif 250 <= angulo_grados < 260:
-                        rotacion +=120
-                    elif 200 <= angulo_grados < 210:
-                        rotacion +=220
-                    elif 220 <= angulo_grados < 230:
-                        rotacion += 198  
-                    elif 210 <= angulo_grados < 220:
-                        rotacion += 199
-                    elif 340 <= angulo_grados < 350:
-                        rotacion +=300
-                    elif 70 <= angulo_grados < 80:
-                        rotacion +=300
-                    elif 110 <= angulo_grados < 120:
-                        rotacion +=220
-                    elif 140 <= angulo_grados < 150:
-                        rotacion +=180
-                    elif 160 <= angulo_grados < 170:
-                        rotacion +=140
-                    elif 20 <= angulo_grados < 30:
-                        rotacion +=40
-                    elif 320 <= angulo_grados < 330:
-                        rotacion +=0
-                    elif 350 <= angulo_grados < 360:
-                        rotacion +=300
-                    elif 10 <= angulo_grados < 20:
-                        rotacion +=70
-                    elif 20 <= angulo_grados < 30:
-                        rotacion +=72
-                    elif 300 <= angulo_grados < 310:
-                        rotacion +=35
-                    elif 280 <= angulo_grados < 290:
-                        rotacion +=65
-                    elif 260 <= angulo_grados < 270:
-                        rotacion +=105
-                    elif 330 <= angulo_grados < 340:
-                        rotacion +=335
-                    elif 80 <= angulo_grados < 90:
-                        rotacion +=300
-                    elif 130 <= angulo_grados < 140:
-                        rotacion +=180
-                    elif 150 <= angulo_grados < 160:
-                        rotacion +=150
-                    elif 170 <= angulo_grados < 180:
-                        rotacion +=105
-                    elif 190 <= angulo_grados < 200:
-                        rotacion +=250
-                    elif 100 <= angulo_grados < 110:
-                        rotacion +=250
-                    elif 240 <= angulo_grados < 250:
-                        rotacion +=250
-                    elif 60 <= angulo_grados < 70:
-                        rotacion +=1
-                
-                    ax.text(
-                        direcciones[j],
-                        posicion_radial,  # Desplazar el texto ligeramente afuera
-                        f"{valor:.2f}%",
-                        fontsize=3.3,
-                        rotation=rotacion,  # Mantener el texto vertical
-                        ha='center',
-                        va='center',
-                        rotation_mode='anchor' ,
-                        fontweight='bold',  # Texto en negrita
-                        color='blue'
-                    )
-                elif 0<valor <= 0.1 :
-                    posicion_radial = radio + 5
-                    ax.text(
-                        direcciones[j],
-                        posicion_radial,  # Desplazar el texto ligeramente afuera
-                        "+",
-                        fontsize=3.3,
-                        rotation=90,  # Mantener el texto vertical
-                        ha='center',
-                        va='center',
-                        rotation_mode='anchor' ,
-                        fontweight='bold',  # Texto en negrita
-                        color='blue'
-                    )
-
-
-        # Agregar línea para la dirección de la pista
-        angulo_pista_rad = np.radians(dir_pista)
-    
-    # Trazar la línea opuesta de la pista
-        angulo_opuesto_rad = np.radians((dir_pista + 180) % 360)  # Dirección opuesta (180 grados)
-        grosor = 3.5 * (limite - 10) + 35
-
-        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [40, 50], color='green', lw=grosor, alpha=0.3)
-        ax.plot([angulo_pista_rad, angulo_opuesto_rad], [50, 50], linestyle='--', color='green', lw=1, alpha=0.7)
-        legend_line = Line2D([0], [0], color='green', lw=2, alpha=0.6)
-
-        # Configurar ejes
-        ax.set_theta_zero_location("N")  # Norte en la parte superior
-        ax.set_theta_direction(-1)  # Dirección en sentido horario
-        ax.set_xticks(np.radians(range(0, 360, 10)))
-        ax.set_yticks(range(10, 51, 10))
-        ax.set_ylim(0, 50)
-
-        labels = ['360' if i == 0 else str(i) for i in range(0, 360, 10)] 
-        ax.set_xticklabels(labels)
-
-        ax.tick_params(axis='y', colors='black',labelsize=3)
-        plt.setp(ax.get_yticklabels(), fontweight='bold', fontsize=3)
-
-        ax.tick_params(axis='x', labelsize=5)
-        ax.grid(True)
-
-        # Títulos y leyenda
-        ax.set_title("Rosa de los Vientos", va='bottom',fontsize=7)
-        ax.legend([legend_line], [f"Pista {dir_pista}°"], loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
-        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1), fontsize=5)
-        plt.subplots_adjust(left=0.1, right=0.9, top=0.9, bottom=0.1)
-
-        buf = BytesIO()
-        plt.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+        fig = plt.gcf()  
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
         buf.seek(0)
-        plt.close(fig)  # Cerrar la figura para liberar memoria
-        
-        # Mostrar el gráfico en Streamlit
-        st.image(buf)
+
         st.download_button(
-        label="Descargar Gráfico",
-        data=buf,
-        file_name="grafico_principal.png",
-        mime="image/png"
-    )
+            label="Descargar Gráfico",
+            data=buf,
+            file_name="grafico_polar.png",
+            mime="image/png",
+            key="unique_download_button_1" 
+        )
+        
+        return fig
 
     def grafico_principal1(self, dir_pista, limite, df_graf1):
     # Crear la figura y el eje polar
@@ -842,13 +746,11 @@ class ProcesadorDeDatos:
 resultados = ProcesadorDeDatos()
 uploaded_file = st.file_uploader("", type=["xlsx", "csv"], key="file_uploader_1")
 dir_pista = st.sidebar.number_input("Ingrese la dirección de la pista", min_value=1, max_value=360, value=1,key="dir_pista")
-limites = st.sidebar.number_input("Ingrese el límite de Componente Transversal (kt)", min_value=10, max_value=40, value=10, key="limites")
-limites_kmh = round(limites * 1.852)
-# Mostrar el valor convertido junto al control
-st.sidebar.markdown(f"**Límite equivalente:** {limites_kmh} km/h")
-st.sidebar.write("Archivo de prueba")
-
-# Botón para descargar el archivo Excel en el sidebar
+#limites = st.sidebar.number_input("Ingrese el límite de Componente Transversal (kt)", min_value=10, max_value=40, value=10, key="limites")
+limites=st.sidebar.selectbox("Selecciona un límite", ["10 kt - 19 km/h", "13 kt - 24 km/h", "20 kt - 37 km/h"])
+def extraer_primer_numero(texto):
+    return int(texto.split()[0])
+limite_kt = extraer_primer_numero(limites)
 
 excel_data = resultados.archivo_prueba()
 st.sidebar.download_button(
@@ -902,37 +804,88 @@ if uploaded_file is not None:
 
                     with col_right:
                         
+                        
                         st.dataframe(comp_transv_styled1)
             
-            cohe=resultados.coheficiente(limites,pa_el_box)
+            cohe=resultados.coheficiente(limite_kt,pa_el_box)
             if cohe is not None:
-                limites_km=round(limites*1.852)
+                direccion_opuesta = (dir_pista + 180) % 360
+                direccion_opuesta_deca=round(direccion_opuesta/10)
 
-                if cohe >= 95:
+                limites_km=round(limite_kt*1.852)
+                dir_pista_deca=round(dir_pista / 10)
+
+                if cohe >= 95 and dir_pista>=10 and direccion_opuesta>=10:
+                    
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista}º</span>- Límite Componente Transversal: <span style="color:green;">{limites} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista_deca} - {direccion_opuesta_deca}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
-                else:
+
+                elif cohe >= 95 and dir_pista>=10 and direccion_opuesta<10:
+                        st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">{dir_pista_deca} - 0{direccion_opuesta}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+
+                elif cohe >= 95 and dir_pista<10 and direccion_opuesta<10:
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista}º</span> - Límite Componente Transversal: <span style="color:red;">{limites} kt</span> / <span style="color:red;">{limites_km} km/h</span>
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - 0{direccion_opuesta}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+                elif cohe >= 95 and dir_pista<10 and direccion_opuesta>=10:
+                    st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - {direccion_opuesta_deca}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+
+                elif cohe < 95 and dir_pista>=10 and direccion_opuesta>=10:
+
+                    st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista_deca} - {direccion_opuesta_deca}</span> - Límite Componente Transversal: <span style="color:red;">{limite_kt} kt</span> / <span style="color:red;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+
+                elif cohe < 95 and dir_pista>=10 and direccion_opuesta<10:
+                     st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">{dir_pista_deca} - 0{direccion_opuesta}</span> - Límite Componente Transversal: <span style="color:red;">{limite_kt} kt</span> / <span style="color:red;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+                elif cohe < 95 and dir_pista<10 and direccion_opuesta<10:
+                     st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">0{dir_pista} - 0{direccion_opuesta}</span> - Límite Componente Transversal: <span style="color:red;">{limite_kt} kt</span> / <span style="color:red;">{limites_km} km/h</span>
+                        </p>
+                        """, unsafe_allow_html=True)
+                     
+                elif cohe < 95 and dir_pista<10 and direccion_opuesta>=10:
+                     st.markdown(f"""
+                        <p style="font-size:20px; color:blue; font-weight:bold;"> 
+                        Coeficiente de utilización: <span style="color:red;">{cohe}%</span> - Dirección de Pista: <span style="color:red;">0{dir_pista} - {direccion_opuesta_deca}</span> - Límite Componente Transversal: <span style="color:red;">{limite_kt} kt</span> / <span style="color:red;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
        
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
-            with st.expander("GRAFICO", expanded=True):
-                fig = resultados.grafico_principal_prueba(df_graf,dir_pista,limites)  # Ahora esto retorna la figura
-                st.pyplot(fig) 
+            with st.expander("ROSA DE VIENTOS"):
+                resultados.grafico_principal_prueba(df_graf,dir_pista,limite_kt)  # Ahora esto retorna la figura
+                #st.pyplot(fig) 
                 
                 #resultados.grafico_principal(dir_pista,limites,df_graf)
-            with st.expander("GRAFICO B"):
-                resultados.grafico_principal1(dir_pista, limites, df_graf_otro)
-            st.dataframe(df_graf)
+            with st.expander("ANEMOGRAMA"):
+                #resultados.grafico_principal1(dir_pista, limites, df_graf_otro)
+                resultados.anemograma(tabla_original)
+                #st.pyplot(fig1)
+            #st.dataframe(df_graf)
             st.dataframe(df_graf_otro)
-                              
+            t=df_graf_otro.sum()
+            st.write(t)                             
 
     if page == "Pruebas individuales":
         with results_container:
@@ -961,13 +914,13 @@ if uploaded_file is not None:
                 st.write(f"Dirección de Pista: {dir_pista}º")
                 st.write(f"Intensidad del Componente Transversal: {y} kt - {yy} km/h")
                 
-                if y <= limites:
+                if y <= limite_kt:
                     st.write("Coheficiente: 100%")
                 else:
                     st.write("Coheficiente: 0")
                 st.expander("Gráfico")
                 buf = BytesIO()
-                resultados.grafico1(nudo,dir,dir_pista,limites,y,buf)
+                resultados.grafico1(nudo,dir,dir_pista,limite_kt,y,buf)
                 buf.seek(0)  # Volver al inicio del buffer
                 #st.image(buf, caption="Gráfico generado", use_column_width=True)
 
