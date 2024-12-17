@@ -17,6 +17,7 @@ import matplotlib.image as mpimg
 from PIL import Image
 
 
+
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
 
 image_path = "images/logo.png" 
@@ -316,7 +317,7 @@ class ProcesadorDeDatos:
         frecuencias = [10, 20, 30, 40,50]
         fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=(4, 4), dpi=300)
         ax.set_facecolor('none')
-        imagen_fondo = Image.open("C:/Users/cespi/Desktop/Proyecto_rosa/rosa_streamlit/logogta.png")
+        imagen_fondo = Image.open("logogta.png")
         imagen_redimensionada = imagen_fondo.resize((250, 150))  # Cambiar a tu tamaño deseado
         imagen_redimensionada = np.array(imagen_redimensionada)
 
