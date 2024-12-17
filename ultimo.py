@@ -24,7 +24,6 @@ st.warning("""
     ⚠️ Aviso: Versión Beta
 
     Esta herramienta está en desarrollo y genera resultados preliminares. Se recomienda validar la información con fuentes oficiales antes de su aplicación.
-
     El uso es bajo la responsabilidad del usuario.""")
 
 image_path = "images/logo.png" 
@@ -66,11 +65,15 @@ st.markdown(
     """
     <style>
         .main-title {
-            margin-top: -55px;  /* Ajusta este valor para mover más hacia arriba */
+            margin-top: -50px;  /* Ajusta este valor para mover más hacia arriba */
             text-align: center; /* Centra el título horizontalmente */
+            font-size: 28px;    /* Tamaño de la fuente */
+            font-weight: bold;  /* Grosor de la fuente */
+            color: #333333;     /* Color del texto (gris oscuro) */
+            font-family: Arial, sans-serif; /* Tipo de fuente */
         }
     </style>
-    <h1 class="main-title">ANÁLISIS DE VIENTOS</h1>
+    <h1 class="main-title">ANÁLISIS DE VIENTOS PARA ORIENTACION DE PISTA</h1>
     """,
     unsafe_allow_html=True
 )
@@ -451,9 +454,10 @@ class ProcesadorDeDatos:
         ax.tick_params(axis='both', labelsize=8)
 
         # Ajustar la leyenda para mostrar los nuevos labels y reducir el tamaño del texto
-        ax.set_legend(labels=labels, fontsize=6, loc='upper left', bbox_to_anchor=(1.1, 0.8), markerscale=1.5, labelspacing=0.05)
+        ax.set_legend(title="Nudos",title_fontsize=6,fontsize=3, loc='lower center', bbox_to_anchor=(1.0, 0.5))
 
-        plt.tight_layout()
+        plt.subplots_adjust(left=0.05, right=0.85, top=0.9, bottom=0.1)
+        #plt.tight_layout()
         st.pyplot(fig)
         
         fig = plt.gcf()  
@@ -462,13 +466,54 @@ class ProcesadorDeDatos:
         buf.seek(0)
 
         st.download_button(
-            label="Descargar Gráfico",
+            label="Descargar",
             data=buf,
             file_name="grafico_polar.png",
             mime="image/png",
             key="unique_download_button_1" 
         )
         
+        return fig
+    
+    def anemograma1(self, tabla):
+        direccion=tabla["Direccion"]
+        intensidad=tabla["Intensidad (kt)"]
+        fig = plt.figure(figsize=(4, 4), dpi=150)  # Tamaño del gráfico
+        ax = WindroseAxes.from_ax(fig=fig)
+        bins = [0, 10, 20, 30, 40, 50]
+    # Crear el gráfico de rosa de vientos
+        ax.bar(direccion, intensidad, normed=True, opening=0.8, edgecolor='white',bins=bins)
+    #ax.set_yticks([10, 20, 30, 40, 50])  # Valores de los anillos
+        ax.set_yticklabels(["10", "20", "30", "40", "50"],fontsize=7.5) 
+        ax.tick_params(axis='both', labelsize=8)
+    # Configurar leyenda y detalles
+        ax.set_legend(title="Nudos",  # Título de la leyenda
+        loc="lower center",  # Ubicación de la leyenda
+          # Posición más precisa (fuera del gráfico)
+          # Número de columnas de la leyenda
+        fontsize=3,  # Tamaño de la fuente
+        title_fontsize=6,  # Tamaño de la fuente del título
+        fancybox=True,  # Borde estilizado
+        bbox_to_anchor=(1.0, 0.5)
+    )
+        
+    # Mostrar la gráfica
+        plt.subplots_adjust(left=0.05, right=0.85, top=0.9, bottom=0.1)
+        #plt.tight_layout()
+        st.pyplot(fig)
+        
+        fig = plt.gcf()  
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=300, bbox_inches="tight")
+        buf.seek(0)
+        st.download_button(
+            label="Descargar",
+            data=buf,
+            file_name="grafico_polar.png",
+            mime="image/png",
+            key="unique_download_button_2" 
+        )
+
         return fig
 
     def grafico_principal1(self, dir_pista, limite, df_graf1):
@@ -881,16 +926,26 @@ if uploaded_file is not None:
        
             df_graf,df_graf_otro=resultados.tabla_grafico(copia)
             #st.dataframe(df_graf)
+            
             with st.expander("ROSA DE VIENTOS"):
                 resultados.grafico_principal_prueba(df_graf,dir_pista,limite_kt)  # Ahora esto retorna la figura
                 #st.pyplot(fig) 
-                
+            with st.expander("ANEMOGRAMAS"):
+                col3, col4 = st.columns(2)
+            
+                with col3:
+   
                 #resultados.grafico_principal(dir_pista,limites,df_graf)
-            with st.expander("ANEMOGRAMA"):
+            #with st.expander("ANEMOGRAMA I"):
                 #resultados.grafico_principal1(dir_pista, limites, df_graf_otro)
-                resultados.anemograma(tabla_original)
+                    resultados.anemograma(tabla_original)
+                with col4:
+            #with st.expander("ANEMOGRAMA II"):
+                    resultados.anemograma1(tabla_original)
                 #st.pyplot(fig1)
-            #st.dataframe(df_graf)
+            st.dataframe(df_graf_otro)
+            st.write(df_graf_otro.sum())
+            st.write(df_graf_otro.sum(axis=1))
                                        
 
     if page == "Pruebas individuales":
