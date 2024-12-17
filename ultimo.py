@@ -19,16 +19,13 @@ from PIL import Image
 
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
-if st.button("ℹ️ Versión Beta"):
-    st.warning("""
-    ⚠️ Advertencia: Versión Beta
-    
-    Esta herramienta está en fase de desarrollo (Beta) y ha sido diseñada en colaboración con el Grupo de Transporte Aéreo (GTA) de la Facultad de Ingeniería Aeroespacial.
 
-    Los resultados generados son provisionales y no deben considerarse como información oficial o definitiva para la toma de decisiones. El uso de esta herramienta queda bajo la total responsabilidad del usuario.
+st.warning("""
+    ⚠️ Aviso: Versión Beta
 
-    Se recomienda validar los cálculos utilizando métodos y fuentes oficiales aprobadas antes de aplicarlos en operaciones reales.
-    """)
+    Esta herramienta está en desarrollo y genera resultados preliminares. Se recomienda validar la información con fuentes oficiales antes de su aplicación.
+
+    El uso es bajo la responsabilidad del usuario.""")
 
 image_path = "images/logo.png" 
 
@@ -844,13 +841,13 @@ if uploaded_file is not None:
                 elif cohe >= 95 and dir_pista<10 and direccion_opuesta<10:
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - 0{direccion_opuesta}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - 0{direccion_opuesta}</span> - Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
                 elif cohe >= 95 and dir_pista<10 and direccion_opuesta>=10:
                     st.markdown(f"""
                         <p style="font-size:20px; color:blue; font-weight:bold;"> 
-                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - {direccion_opuesta_deca}</span>- Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
+                        Coeficiente de utilización: <span style="color:green;">{cohe}%</span> - Dirección de Pista: <span style="color:green;">0{dir_pista} - {direccion_opuesta_deca}</span> - Límite Componente Transversal: <span style="color:green;">{limite_kt} kt</span> / <span style="color:green;">{limites_km} km/h</span>
                         </p>
                         """, unsafe_allow_html=True)
 
@@ -894,9 +891,7 @@ if uploaded_file is not None:
                 resultados.anemograma(tabla_original)
                 #st.pyplot(fig1)
             #st.dataframe(df_graf)
-            st.dataframe(df_graf_otro)
-            t=df_graf_otro.sum()
-            st.write(t)                             
+                                       
 
     if page == "Pruebas individuales":
         with results_container:
