@@ -19,6 +19,16 @@ from PIL import Image
 
 
 st.set_page_config(layout="wide",page_title="Análisis de vientos")
+if st.button("ℹ️ Versión Beta"):
+    st.warning("""
+    ⚠️ Advertencia: Versión Beta
+    
+    Esta herramienta está en fase de desarrollo (Beta) y ha sido diseñada en colaboración con el Grupo de Transporte Aéreo (GTA) de la Facultad de Ingeniería Aeroespacial.
+
+    Los resultados generados son provisionales y no deben considerarse como información oficial o definitiva para la toma de decisiones. El uso de esta herramienta queda bajo la total responsabilidad del usuario.
+
+    Se recomienda validar los cálculos utilizando métodos y fuentes oficiales aprobadas antes de aplicarlos en operaciones reales.
+    """)
 
 image_path = "images/logo.png" 
 
@@ -232,17 +242,17 @@ class ProcesadorDeDatos:
 
         def highlight_values_nudos(val):
             if val > limite_kt:
-                return "background-color: red; color: white; text-align: left;"
+                return "background-color: white; color: red; text-align: left;font-weight: bold;"
             else:
-                return "background-color: green; color: white; text-align: left;"
+                return "background-color: white; color: green; text-align: left;font-weight: bold;"
         def highlight_values_km(val):
             limites_km=round(limite_kt*1.852,2)
 
 
             if val > limites_km:
-                return "background-color: red; color: white;text-align: left;"
+                return "background-color: white; color: red;text-align: left;font-weight: bold;"
             else:
-                return "background-color: green; color: white;text-align: left;"
+                return "background-color: white; color: green;text-align: left;font-weight: bold;"
 
         styled_y = y.style.map(highlight_values_nudos, subset=["Nudos"]).format("{:.2f}")
         styled_yy = yy.style.map(highlight_values_km, subset=["km/h"]).format("{:.2f}")
